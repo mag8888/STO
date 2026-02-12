@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { Browser, Page } from 'puppeteer';
 import path from 'path';
+import fs from 'fs';
 
 puppeteer.use(StealthPlugin());
 
@@ -12,6 +13,19 @@ const USER_DATA_DIR = path.join(process.cwd(), 'session_data');
 
 export async function initBrowser() {
     if (browser) return { browser, page };
+
+    if (browser) return { browser, page };
+
+    // Fix for "Profile in use" error in Docker/Railway
+    const lockFile = path.join(USER_DATA_DIR, 'SingletonLock');
+    if (fs.existsSync(lockFile)) {
+        console.log('Removing stale Chromium lock file...');
+        try {
+            fs.unlinkSync(lockFile);
+        } catch (e) {
+            console.error('Failed to remove lock file:', e);
+        }
+    }
 
     console.log('Launching browser...');
     browser = await puppeteer.launch({
