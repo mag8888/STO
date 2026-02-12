@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import fs from 'fs';
+import path from 'path';
 import { initBrowser, closeBrowser } from './browser';
 import { sendMessageToUser, checkLogin, startDialogue } from './actions';
 import prisma from './db';
@@ -18,6 +20,16 @@ interface StartDialogueBody {
 
 fastify.get('/', async (request, reply) => {
     return { status: 'ok', message: 'Telegram Simulator is running' };
+});
+
+fastify.get('/login-qr', async (request, reply) => {
+    const imagePath = path.join(process.cwd(), 'login_status.png');
+    if (fs.existsSync(imagePath)) {
+        const stream = fs.createReadStream(imagePath);
+        return reply.type('image/png').send(stream);
+    } else {
+        return reply.code(404).send({ error: 'QR code not found yet. Browser might still be initializing.' });
+    }
 });
 
 fastify.post<{ Body: SendMessageBody }>('/send', async (request, reply) => {
