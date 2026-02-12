@@ -14,8 +14,6 @@ const USER_DATA_DIR = path.join(process.cwd(), 'session_data');
 export async function initBrowser() {
     if (browser) return { browser, page };
 
-    if (browser) return { browser, page };
-
     // Fix for "Profile in use" error in Docker/Railway
     const lockFile = path.join(USER_DATA_DIR, 'SingletonLock');
     try {
@@ -80,14 +78,14 @@ export async function initBrowser() {
     // Set viewport
     await page.setViewport({ width: 1280, height: 800 });
 
-    console.log('Loading Telegram Web...');
+    console.log('Loading Telegram Web A...');
     try {
         // Use user agent rotation or fixed one
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
 
-        // Go to Telegram Web
-        await page.goto('https://web.telegram.org/k/', {
-            waitUntil: 'networkidle0', // Wait until network is quiet (better for SPAs)
+        // Go to Telegram Web A (Better stability?)
+        await page.goto('https://web.telegram.org/a/', {
+            waitUntil: 'networkidle0',
             timeout: 60000
         });
 
@@ -95,7 +93,7 @@ export async function initBrowser() {
 
         // Try to wait for key elements (QR canvas or chat list)
         try {
-            await page.waitForSelector('canvas, .chat-list', { timeout: 10000 });
+            await page.waitForSelector('#auth-qr-form, .chat-list, .login-header', { timeout: 15000 });
         } catch (e) {
             console.log('Element wait timed out, proceeding to screenshot anyway');
         }
