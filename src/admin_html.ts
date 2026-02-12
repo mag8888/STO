@@ -396,6 +396,22 @@ export const adminHtml = `
             } catch(e) { alert('Net Error'); }
         }
 
+        async function loginPassword() {
+            const password = document.getElementById('password-input').value;
+            if(!password) return alert('Enter password');
+            
+            try {
+                const res = await fetch('/login-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const data = await res.json();
+                alert(data.success ? data.message : 'Error: ' + data.error);
+                if(data.success) setTimeout(refreshScreen, 3000);
+            } catch(e) { alert('Net Error'); }
+        }
+
         async function sendMessage(e) {
             e.preventDefault();
             const btn = e.target.querySelector('button');
