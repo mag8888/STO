@@ -83,11 +83,16 @@ const start = async () => {
         await prisma.$connect();
         console.log('Connected to Database');
 
-        await initBrowser();
-
         const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
         await fastify.listen({ port, host: '0.0.0.0' });
         console.log(`Server listening on http://0.0.0.0:${port}`);
+
+        // Initialize browser after server is up to avoid deployment timeouts
+        initBrowser().then(() => {
+            console.log('Browser initialized successfully');
+        }).catch(err => {
+            console.error('Failed to initialize browser:', err);
+        });
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

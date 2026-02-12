@@ -35,7 +35,7 @@ export async function initBrowser() {
     await page.setViewport({ width: 1280, height: 800 });
 
     console.log('Browser launched. Loading Telegram Web...');
-    await page.goto('https://web.telegram.org/k/', { waitUntil: 'networkidle0', timeout: 60000 });
+    await page.goto('https://web.telegram.org/k/', { waitUntil: 'networkidle2', timeout: 60000 });
 
     // Take a screenshot to check login status/QR code
     console.log('Page loaded. Taking screenshot...');
