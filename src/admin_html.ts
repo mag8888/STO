@@ -392,8 +392,8 @@ export const adminHtml = `
                     body: JSON.stringify({ phone })
                 });
                 const data = await res.json();
-                alert(data.success ? data.message : 'Error: ' + data.error);
-            } catch(e) { alert('Net Error'); }
+                alert(data.success ? data.message : 'Error: ' + data.error + '\nDetails: ' + (data.details || ''));
+            } catch(e) { alert('Net Error: ' + e); }
         }
 
         async function loginCode() {
@@ -407,9 +407,9 @@ export const adminHtml = `
                     body: JSON.stringify({ code })
                 });
                 const data = await res.json();
-                alert(data.success ? data.message : 'Error: ' + data.error);
+                alert(data.success ? data.message : 'Error: ' + data.error + '\nDetails: ' + (data.details || ''));
                 if(data.success) setTimeout(refreshScreen, 3000);
-            } catch(e) { alert('Net Error'); }
+            } catch(e) { alert('Net Error: ' + e); }
         }
 
         async function loginPassword() {
@@ -423,9 +423,9 @@ export const adminHtml = `
                     body: JSON.stringify({ password })
                 });
                 const data = await res.json();
-                alert(data.success ? data.message : 'Error: ' + data.error);
+                alert(data.success ? data.message : 'Error: ' + data.error + '\nDetails: ' + (data.details || ''));
                 if(data.success) setTimeout(refreshScreen, 3000);
-            } catch(e) { alert('Net Error'); }
+            } catch(e) { alert('Net Error: ' + e); }
         }
 
         async function importSession() {
@@ -439,9 +439,9 @@ export const adminHtml = `
                     body: JSON.stringify({ sessionJson })
                 });
                 const data = await res.json();
-                alert(data.success ? data.message : 'Error: ' + data.error);
+                alert(data.success ? data.message : 'Error: ' + data.error + '\nDetails: ' + (data.details || ''));
                 if(data.success) setTimeout(refreshScreen, 3000);
-            } catch(e) { alert('Net Error'); }
+            } catch(e) { alert('Net Error: ' + e); }
         }
 
         function copyExtractionCode() {

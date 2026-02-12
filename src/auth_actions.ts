@@ -91,12 +91,29 @@ export async function loginWithPhone(page: Page, phoneNumber: string) {
     }
 
     // Clear input first
+    await page.evaluate((selector) => {
+        const el = document.querySelector(selector) as HTMLInputElement;
+        if (el) {
+            el.value = '';
+            el.focus();
+        }
+    }, inputSelector);
+
+    // Fallback clear
     await page.click(inputSelector);
     await page.keyboard.down('Meta'); await page.keyboard.press('a'); await page.keyboard.up('Meta');
     await page.keyboard.press('Backspace');
 
-    await page.type(inputSelector, phoneNumber, { delay: 100 });
-    await new Promise(r => setTimeout(r, 500));
+    console.log(`[Auth] Typing phone number: ${phoneNumber}`);
+    await page.type(inputSelector, phoneNumber, { delay: 150 });
+
+    // Check if entered correctly
+    const val = await page.evaluate((selector) => {
+        return (document.querySelector(selector) as HTMLInputElement).value;
+    }, inputSelector);
+    console.log(`[Auth] Input value after typing: ${val}`);
+
+    await new Promise(r => setTimeout(r, 1000));
     await screenshot(page, 'phone_entered');
 
     // 3. Click Next
