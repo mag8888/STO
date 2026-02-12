@@ -1,7 +1,7 @@
-
 import Fastify from 'fastify';
 import { initBrowser, closeBrowser } from './browser';
 import { sendMessageToUser, checkLogin, startDialogue } from './actions';
+import prisma from './db';
 
 const fastify = Fastify({ logger: true });
 
@@ -79,6 +79,10 @@ fastify.post<{ Body: StartDialogueBody }>('/start-dialogue', async (request, rep
 const start = async () => {
     try {
         console.log('Starting server and browser...');
+        // Verify DB connection
+        await prisma.$connect();
+        console.log('Connected to Database');
+
         await initBrowser();
 
         await fastify.listen({ port: 3000, host: '0.0.0.0' });
@@ -92,6 +96,7 @@ const start = async () => {
 process.on('SIGINT', async () => {
     console.log('Shutting down...');
     await closeBrowser();
+    await prisma.$disconnect();
     process.exit(0);
 });
 
