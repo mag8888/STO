@@ -214,3 +214,44 @@ export async function submitPassword(page: Page, password: string) {
         throw new Error('Login failed after password.');
     }
 }
+
+export async function injectSession(page: Page, sessionData: any) {
+    console.log('[Auth] Injecting session data...');
+    await screenshot(page, 'start_injection');
+
+    // Ensure we are on the target domain
+    if (!page.url().includes('web.telegram.org')) {
+        await page.goto('https://web.telegram.org/k/', { waitUntil: 'networkidle0' });
+    }
+
+    try {
+        await page.evaluate((data) => {
+            localStorage.clear();
+            for (const key in data) {
+                localStorage.setItem(key, data[key]);
+            }
+        }, sessionData);
+
+        console.log('[Auth] LocalStorage injected. Reloading...');
+        await page.reload({ waitUntil: 'networkidle0' });
+        await new Promise(r => setTimeout(r, 2000));
+
+        await screenshot(page, 'after_injection');
+
+        // specific check for K version
+        const chatList = await page.$('.chat-list');
+        if (chatList) {
+            console.log('[Auth] Injection successful! Logged in.');
+            return true;
+        } else {
+            console.warn('[Auth] Chat list not found after injection. Checking for login screen...');
+            const loginBtn = await page.$('.login_head_submit_btn');
+            if (loginBtn) throw new Error('Injection failed: Still on login screen (keys might be invalid).');
+            return true; // Assume success if no login screen, maybe loading
+        }
+
+    } catch (e) {
+        console.error('[Auth] Injection failed:', e);
+        throw e;
+    }
+}
