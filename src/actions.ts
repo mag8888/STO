@@ -172,7 +172,7 @@ export async function openChat(page: Page, username: string): Promise<string> {
                     return result.singleNodeValue;
                 }, username);
 
-                let element = handle.asElement();
+                let element = handle.asElement() as any;
 
                 // Fallback: search result item
                 if (!element) {
