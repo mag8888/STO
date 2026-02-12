@@ -548,6 +548,7 @@ export const adminHtml = `
         fetch('/').then(r => r.json()).then(d => {
             if(d.browserStatus) document.getElementById('browser-status').textContent = d.browserStatus;
         }).catch(() => {});
+        // End of script
     </script>
 </body>
 </html>
