@@ -130,37 +130,105 @@ async function scrapeHistory(page: Page, dialogueId: number) {
 
 // --- Main Actions ---
 
-export async function sendMessageToUser(page: Page, username: string, message: string) {
-    // ... Implementation reused ...
-    // But better to use startDialogue logic which calls this internally or separately.
-    // Keeping for compatibility with /send endpoint if used separately, but ideally we merge logic.
-    // For now, I will update sendMessageToUser to also log if it's called standalone, 
-    // but the main focus is startDialogue.
+// --- Shared Navigation Logic ---
 
-    // ... (same implementation as before for navigation) ...
-    console.log(`Navigating to chat with @${username}...`);
-    const targetUrl = `https://web.telegram.org/k/#@${username}`;
-    await page.goto(targetUrl, { waitUntil: 'networkidle0' });
+export async function openChat(page: Page, username: string): Promise<string> {
+    console.log(`[Nav] Opening chat with @${username}...`);
+
+    // 1. Try Direct Navigation
+    const targetUrl = username.includes('http') ? username : `https://web.telegram.org/k/#@${username}`;
+    if (page.url() !== targetUrl) {
+        await page.goto(targetUrl, { waitUntil: 'networkidle0' });
+    }
 
     const chatSelector = '.chat-input-control';
-    try { await page.waitForSelector(chatSelector, { timeout: 10000 }); } catch (e) { throw new Error(`Chat not found: ${e}`); }
+    const searchInputSelector = '.input-search > input';
+    let chatFound = false;
 
-    const name = await getChatName(page);
+    // Check if we are already in the chat (if accessed via URL directly)
+    try {
+        await page.waitForSelector(chatSelector, { timeout: 5000 });
+        chatFound = true;
+    } catch (e) {
+        console.log(`[Nav] Direct navigation didn't open chat immediately. Trying search...`);
+        try {
+            await page.waitForSelector(searchInputSelector, { timeout: 4000 });
+            await page.click(searchInputSelector);
+            // Clear search
+            await page.keyboard.down('Meta'); await page.keyboard.press('a'); await page.keyboard.up('Meta'); await page.keyboard.press('Backspace');
+
+            console.log(`[Nav] Searching for ${username}...`);
+            await page.type(searchInputSelector, username, { delay: 100 });
+            await new Promise(r => setTimeout(r, 3000));
+
+            // Search result click logic
+            let clicked = false;
+            try {
+                // Try to find exact match first
+                const handle = await page.evaluateHandle((u) => {
+                    const text = u.replace('@', '');
+                    const xpath = `//*[contains(@class, 'peer-title') and (text()='${text}' or text()='@${text}')]`;
+                    const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                    return result.singleNodeValue;
+                }, username);
+
+                let element = handle.asElement();
+
+                // Fallback: search result item
+                if (!element) {
+                    element = await page.$('.search-result'); // click first result
+                }
+
+                if (element) {
+                    await element.click();
+                    clicked = true;
+                }
+            } catch (xErr) { console.log("Click failed:", xErr); }
+
+            if (!clicked) {
+                // Fallback: Arrow down + Enter
+                await page.keyboard.press('ArrowDown');
+                await new Promise(r => setTimeout(r, 500));
+                await page.keyboard.press('Enter');
+            }
+
+            await page.waitForSelector(chatSelector, { timeout: 8000 });
+            chatFound = true;
+        } catch (searchErr) {
+            console.error(`[Nav] Search failed: ${searchErr}`);
+            throw new Error(`Chat with @${username} not found.`);
+        }
+    }
+
+    if (!chatFound) throw new Error(`Failed to open chat with @${username}`);
+
+    await new Promise(r => setTimeout(r, 1000));
+    return await getChatName(page);
+}
+
+
+// --- Main Actions ---
+
+export async function sendMessageToUser(page: Page, username: string, message: string) {
+    const name = await openChat(page, username);
 
     // DB Init
     const { dialogue } = await ensureUserAndDialogue(username, name);
 
-    // Scrape before sending
-    await scrapeHistory(page, dialogue.id);
+    // Scrape before sending (optional but good for context)
+    // await scrapeHistory(page, dialogue.id); 
 
     // Send
     const inputSelector = '.input-message-input';
+    await page.waitForSelector(inputSelector);
     await page.click(inputSelector);
-    for (const char of message) { await page.type(inputSelector, char, { delay: Math.random() * 100 + 50 }); }
+
+    console.log(`[Msg] Typing message...`);
+    for (const char of message) { await page.type(inputSelector, char, { delay: Math.random() * 50 + 20 }); }
     await new Promise(r => setTimeout(r, 500));
     await page.keyboard.press('Enter');
 
-    console.log(`Message sent to @${username}`);
+    console.log(`[Msg] Sent to @${username}`);
 
     // Save sent message
     await saveMessageToDb(dialogue.id, 'SIMULATOR', message);
@@ -195,83 +263,14 @@ export async function getChatName(page: Page): Promise<string> {
 export async function startDialogue(page: Page, username: string, referrer: string, topic: string) {
     console.log(`Starting dialogue with @${username}...`);
 
-    // 1. Navigation & Search Logic 
-    // ... (Copying search logic from previous ver) ...
-    const targetUrl = username.includes('http') ? username : `https://web.telegram.org/k/#@${username}`;
-    await page.goto(targetUrl, { waitUntil: 'networkidle0' });
-
-    const chatSelector = '.chat-input-control';
-    const searchInputSelector = '.input-search > input';
-
-    let chatFound = false;
-
-    try {
-        await page.waitForSelector(chatSelector, { timeout: 5000 });
-        chatFound = true;
-    } catch (e) {
-        console.log(`Direct navigation failed. Trying search...`);
-        try {
-            await page.waitForSelector(searchInputSelector, { timeout: 4000 });
-            await page.click(searchInputSelector);
-            await page.keyboard.down('Meta'); await page.keyboard.press('a'); await page.keyboard.up('Meta'); await page.keyboard.press('Backspace');
-            await page.type(searchInputSelector, username, { delay: 100 });
-            await new Promise(r => setTimeout(r, 3000));
-
-            // Search result click logic (XPath/Coordinate)
-            let clicked = false;
-            try {
-                const handle = await page.evaluateHandle((u) => {
-                    const text = u;
-                    const xpath = `//*[contains(text(), "${text}") or contains(text(), "@${text}")]`;
-                    // @ts-ignore
-                    const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                    return result.singleNodeValue;
-                }, username);
-
-                const element = handle.asElement();
-                if (element) {
-                    // @ts-ignore
-                    await element.evaluate((el: any) => el.scrollIntoView({ block: 'center', inline: 'center' }));
-                    await new Promise(r => setTimeout(r, 500));
-                    const box = await element.boundingBox();
-                    if (box) {
-                        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-                        await page.mouse.down();
-                        await new Promise(r => setTimeout(r, 100));
-                        await page.mouse.up();
-                        clicked = true;
-                    } else {
-                        await element.evaluate((el: any) => el.click());
-                        clicked = true;
-                    }
-                }
-            } catch (xErr) { console.log("XPath click failed:", xErr); }
-
-            if (!clicked) {
-                await page.keyboard.press('ArrowDown');
-                await new Promise(r => setTimeout(r, 500));
-                await page.keyboard.press('Enter');
-            }
-
-            await page.waitForSelector(chatSelector, { timeout: 8000 });
-            chatFound = true;
-        } catch (searchErr) {
-            const isLoginPage = await page.$('.login_head_submit_btn, .login_header');
-            if (isLoginPage) throw new Error('User is not logged in.');
-            throw new Error(`Chat with @${username} not found via Search.`);
-        }
-    }
-
-    if (!chatFound) throw new Error(`Failed to open chat with @${username}`);
-
-    // 2. Initial Data Gathering
-    await new Promise(r => setTimeout(r, 2000));
-    let name = await getChatName(page);
+    // Use shared openChat
+    const name = await openChat(page, username);
     console.log(`Detected name: ${name}`);
-    if (!name || name === "Unknown" || name === "Saved Messages") name = username;
+
+    const displayName = (name && name !== "Unknown" && name !== "Saved Messages") ? name : username;
 
     // 3. DB Sync & History Scrape
-    const { user, dialogue } = await ensureUserAndDialogue(username, name);
+    const { user, dialogue } = await ensureUserAndDialogue(username, displayName);
     await scrapeHistory(page, dialogue.id);
 
     // 4. Construct Message
