@@ -14,12 +14,16 @@ export async function loginWithPhone(page: Page, phoneNumber: string) {
         if (chatList) throw new Error('Already logged in!');
     }
 
-    // 1. Click "Log in by phone Number" if visible (usually it defaults to QR)
-    // In Web K, the button is often "Log in by phone Number"
+    // 1. Click "Log in by phone Number" if visible
     try {
-        const phoneLoginBtn = await page.$x('//button[contains(., "Phone Number")]');
-        if (phoneLoginBtn.length > 0) {
-            await (phoneLoginBtn[0] as any).click();
+        const phoneLoginBtnHandle = await page.evaluateHandle(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            return buttons.find(b => b.textContent && b.textContent.includes('Phone Number'));
+        });
+
+        const phoneLoginBtn = phoneLoginBtnHandle.asElement();
+        if (phoneLoginBtn) {
+            await phoneLoginBtn.click();
             await new Promise(r => setTimeout(r, 500));
         }
     } catch (e) {
