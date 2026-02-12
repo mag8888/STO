@@ -21,7 +21,13 @@ RUN apt-get update && apt-get install -y \
     libgbm1 \
     libxrandr2 \
     libcups2 \
-    python3 \
+    fonts-liberation \
+    libappindicator3-1 \
+    libnspr4 \
+    libnss3 \
+    lsb-release \
+    xdg-utils \
+    wget \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 

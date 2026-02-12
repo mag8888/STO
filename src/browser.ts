@@ -37,13 +37,28 @@ export async function initBrowser() {
     page = pages.length > 0 ? pages[0] : await browser.newPage();
 
     // Set viewport to a common resolution
+    console.log('Browser launched. New page created.');
+
+    // Forward console logs from the browser to the server terminal
+    page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+    page.on('pageerror', err => console.error('PAGE ERROR:', err));
+    page.on('requestfailed', request => console.error(`PAGE REQUEST FAILED: ${request.failure()?.errorText} ${request.url()}`));
+
+    // Set viewport
     await page.setViewport({ width: 1280, height: 800 });
 
-    console.log('Browser launched. Loading Telegram Web...');
+    console.log('Loading Telegram Web...');
     try {
-        // Use domcontentloaded for faster initial load, then wait for content
-        await page.goto('https://web.telegram.org/k/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        console.log('Page loaded (domcontentloaded). Waiting for QR code or chat list...');
+        // Use user agent rotation or fixed one
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
+
+        // Go to Telegram Web
+        await page.goto('https://web.telegram.org/k/', {
+            waitUntil: 'networkidle0', // Wait until network is quiet (better for SPAs)
+            timeout: 60000
+        });
+
+        console.log('Page loaded (networkidle0). Waiting for selector...');
 
         // Try to wait for key elements (QR canvas or chat list)
         try {
