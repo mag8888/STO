@@ -51,7 +51,7 @@ export async function initBrowser() {
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // CRITICAL for Docker
+            '--disable-dev-shm-usage',
             '--disable-gpu',
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
@@ -60,7 +60,9 @@ export async function initBrowser() {
             '--window-position=0,0',
             '--ignore-certificate-errors',
             '--ignore-certificate-errors-spki-list',
-            '--user-agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"'
+            '--disable-blink-features=AutomationControlled', // Critical for preventing detection/reload loops
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"'
         ]
     });
 
