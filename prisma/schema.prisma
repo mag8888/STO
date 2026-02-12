@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  telegramId String  @unique // User ID or username if ID unknown
+  username  String?
+  firstName String?
+  lastName  String?
+  bio       String?
+  status    UserStatus @default(LEAD)
+  tags      Json?    // Stored as JSON array of strings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dialogues Dialogue[]
+  embeddings Embedding[]
+}
+
+model Dialogue {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  status    DialogueStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages  Message[]
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  dialogueId Int
+  dialogue   Dialogue @relation(fields: [dialogueId], references: [id])
+  sender     MessageSender
+  text       String
+  createdAt  DateTime @default(now())
+}
+
+model Embedding {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  vector    Unsupported("vector(384)") // Support for 384-dim vectors (e.g. all-MiniLM-L6-v2)
+  model     String   // e.g. "xenova/all-MiniLM-L6-v2"
+  createdAt DateTime @default(now())
+}
+
+enum UserStatus {
+  LEAD
+  QUALIFIED
+  REJECTED
+  MATCHED
+}
+
+enum DialogueStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum MessageSender {
+  USER
+  SIMULATOR
+  OPERATOR
+}
