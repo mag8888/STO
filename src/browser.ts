@@ -62,7 +62,9 @@ export async function initBrowser() {
             '--ignore-certificate-errors-spki-list',
             '--disable-blink-features=AutomationControlled',
             '--disable-features=IsolateOrigins,site-per-process',
-        ]
+        ],
+        dumpio: true, // Log browser errors to stdout
+        timeout: 30000 // 30s launch timeout
     });
 
     const pages = await browser.pages();
@@ -122,7 +124,14 @@ export function getBrowserInstance() {
 
 export async function closeBrowser() {
     if (browser) {
-        await browser.close();
+        try {
+            await Promise.race([
+                browser.close(),
+                new Promise(resolve => setTimeout(resolve, 3000)) // Force close after 3s
+            ]);
+        } catch (e) {
+            console.error('Error closing browser:', e);
+        }
         browser = null;
         page = null;
     }
