@@ -25,6 +25,18 @@ fastify.get('/', async (request, reply) => {
     return { status: 'ok', message: 'Telegram Simulator is running', browserStatus };
 });
 
+fastify.get('/reload', async (request, reply) => {
+    const { page } = getBrowserInstance();
+    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
+
+    try {
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        return { success: true, message: 'Page reloaded' };
+    } catch (e) {
+        return reply.code(500).send({ error: 'Reload failed', details: (e as Error).message });
+    }
+});
+
 fastify.get('/screen', async (request, reply) => {
     const { page } = getBrowserInstance();
     if (!page) {
