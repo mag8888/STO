@@ -261,7 +261,38 @@ fastify.post<{ Body: LoginPasswordBody }>('/login-password', async (request, rep
 
         return { success: true, message: 'Login successful (2FA)! Listener started.' };
     } catch (err) {
+    } catch (err) {
         return reply.code(500).send({ error: 'Failed to submit password', details: (err as Error).message });
+    }
+});
+
+interface ImportSessionBody { sessionJson: string; }
+
+fastify.post<{ Body: ImportSessionBody }>('/import-session', async (request, reply) => {
+    const { sessionJson } = request.body;
+    if (!sessionJson) return reply.code(400).send({ error: 'Session JSON required' });
+
+    let sessionData;
+    try {
+        sessionData = JSON.parse(sessionJson);
+    } catch (e) {
+        return reply.code(400).send({ error: 'Invalid JSON format' });
+    }
+
+    const { page } = await initBrowser();
+    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
+
+    try {
+        const { injectSession } = await import('./auth_actions');
+        await injectSession(page, sessionData);
+
+        // Start listener immediately after successful login
+        const { startListener } = await import('./listener');
+        startListener(page);
+
+        return { success: true, message: 'Session injected successfully! Reloading...' };
+    } catch (err) {
+        return reply.code(500).send({ error: 'Failed to inject session', details: (err as Error).message });
     }
 });
 

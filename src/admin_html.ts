@@ -314,6 +314,22 @@ export const adminHtml = `
                     <button class="tg-button secondary" onclick="loginPassword()">3. Login with Password</button>
                     
                 </div>
+                </div>
+            </div>
+
+            <!-- Session Import Card -->
+            <div class="section-card">
+                <div class="card-header"><h2>Import Session (Advanced)</h2></div>
+                <div class="controls-grid">
+                     <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">
+                        1. Open Console in your browser (F12)<br>
+                        2. Run extraction code (see below)<br>
+                        3. Paste JSON result here
+                    </p>
+                    <textarea id="session-input" class="tg-input" rows="3" placeholder='{"key": "value", ...}'></textarea>
+                    <button class="tg-button" onclick="importSession()">🚀 Inject Session</button>
+                    <button class="tg-button secondary" onclick="copyExtractionCode()">📋 Copy Extraction Code</button>
+                </div>
             </div>
             
             <div id="send-form-card" class="section-card">
@@ -410,6 +426,30 @@ export const adminHtml = `
                 alert(data.success ? data.message : 'Error: ' + data.error);
                 if(data.success) setTimeout(refreshScreen, 3000);
             } catch(e) { alert('Net Error'); }
+        }
+
+            } catch(e) { alert('Net Error'); }
+        }
+
+        async function importSession() {
+            const sessionJson = document.getElementById('session-input').value;
+            if(!sessionJson) return alert('Paste session JSON');
+            
+            try {
+                const res = await fetch('/import-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionJson })
+                });
+                const data = await res.json();
+                alert(data.success ? data.message : 'Error: ' + data.error);
+                if(data.success) setTimeout(refreshScreen, 3000);
+            } catch(e) { alert('Net Error'); }
+        }
+
+        function copyExtractionCode() {
+            const code = \`(function(){const s={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);s[k]=localStorage.getItem(k);}const j=JSON.stringify(s);console.log(j);copy(j);alert('Copied to clipboard!');})();\`;
+            navigator.clipboard.writeText(code).then(() => alert('Code copied! Run it in your browser Console.'));
         }
 
         async function sendMessage(e) {
