@@ -6,89 +6,306 @@ export const adminHtml = `
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telegram Simulator Admin</title>
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --accent: #3b82f6; --success: #22c55e; --danger: #ef4444; }
-        body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 350px; gap: 20px; }
-        .card { background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        h1, h2 { margin-top: 0; }
-        .screen-container { position: relative; width: 100%; aspect-ratio: 16/10; background: #000; border-radius: 8px; overflow: hidden; }
-        #live-screen { width: 100%; height: 100%; object-fit: contain; }
-        .controls { display: grid; gap: 10px; margin-top: 20px; }
-        button { background: var(--accent); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; font-weight: 500; transition: opacity 0.2s; }
-        button:hover { opacity: 0.9; }
-        button.danger { background: var(--danger); }
-        button.success { background: var(--success); }
-        input, textarea { width: 100%; padding: 8px; margin-bottom: 10px; background: #334155; border: 1px solid #475569; color: white; border-radius: 6px; box-sizing: border-box; }
-        .log-list { max-height: 500px; overflow-y: auto; font-family: monospace; font-size: 13px; }
-        .log-item { padding: 8px; border-bottom: 1px solid #334155; }
-        .log-item:last-child { border-bottom: none; }
-        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 5px; }
-        .badge.out { background: var(--accent); }
-        .badge.in { background: var(--success); }
-        .status-bar { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-        .status-online { background: var(--success); box-shadow: 0 0 8px var(--success); }
-        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+        :root {
+            --bg-color: #ffffff;
+            --secondary-bg: #f4f4f5;
+            --text-primary: #000000;
+            --text-secondary: #707579;
+            --accent-blue: #3390ec;
+            --accent-green: #34c759;
+            --accent-red: #ef4444;
+            --border-color: #e5e7eb;
+            --hover-bg: #f5f5f5;
+        }
+
+        body {
+            background-color: var(--secondary-bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            background: var(--bg-color);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            margin: 0;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            font-size: 12px;
+            background: #e0f2f1;
+            color: #00695c;
+            padding: 4px 8px;
+            border-radius: 12px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 20px auto;
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 20px;
+            padding: 0 20px;
+        }
+
+        .section-card {
+            background: var(--bg-color);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-header h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Live Screen */
+        .screen-wrapper {
+            background: #000;
+            aspect-ratio: 16/10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        #live-screen {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Message List (Telegram Style) */
+        .chat-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .chat-item {
+            display: flex;
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid transparent;
+        }
+
+        .chat-item:hover {
+            background-color: var(--hover-bg);
+            border-radius: 12px;
+        }
+
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #66a6ff 0%, #89f7fe 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .chat-content {
+            flex: 1;
+            min-width: 0; /* for text overflow */
+        }
+
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .chat-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .chat-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .chat-preview {
+            color: var(--text-secondary);
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .badge {
+            background: var(--accent-blue);
+            color: white;
+            border-radius: 10px;
+            padding: 0 8px;
+            font-size: 11px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .badge.out { background: #e0e0e0; color: #555; }
+
+        /* Controls */
+        .controls-grid {
+            padding: 15px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .tg-button {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-weight: 500;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .tg-button:hover { opacity: 0.9; }
+        .tg-button.secondary { background: #eef2f5; color: var(--accent-blue); }
+        .tg-button.danger { background: rgba(239, 68, 68, 0.1); color: var(--accent-red); }
+
+        .form-group { margin-bottom: 12px; }
+        .form-label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
+        .tg-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 15px;
+            background: var(--bg-color);
+            box-sizing: border-box;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .tg-input:focus { border-color: var(--accent-blue); }
+
+        @media (max-width: 800px) {
+            .container { grid-template-columns: 1fr; }
+            .header { border-bottom: 1px solid var(--border-color); }
+        }
     </style>
 </head>
 <body>
-    <div class="status-bar">
-        <h1>🤖 AI Ass Admin</h1>
-        <div><span class="status-dot status-online"></span> System Online</div>
-        <div id="browser-status">Browser: Checking...</div>
+
+    <div class="header">
+        <h1>
+            <span style="font-size: 24px;">🤖</span> 
+            Telegram Simulator 
+            <span id="browser-status" class="status-badge">Checking...</span>
+        </h1>
     </div>
 
     <div class="container">
-        <!-- Main Column: Screen & Logs -->
-        <div style="display: flex; flex-direction: column; gap: 20px;">
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h2>Live View</h2>
-                    <button onclick="refreshScreen()">🔄 Refresh</button>
+        <!-- Center Column: Messages -->
+        <div>
+           <div class="section-card">
+                <div class="card-header">
+                    <h2>Recent Messages</h2>
+                    <button class="tg-button secondary" onclick="loadMessages()" style="width: auto; padding: 6px 12px; font-size: 12px;">Update</button>
                 </div>
-                <div class="screen-container">
-                    <img id="live-screen" src="/screen" alt="Loading screen...">
+                <div id="message-log" class="chat-list">
+                    <div style="padding: 20px; text-align: center; color: var(--text-secondary);">Loading chats...</div>
                 </div>
-                <p style="font-size: 12px; color: #94a3b8; margin-top: 5px;">Auto-refreshes every 5s. If white/stuck, try Reload Browser.</p>
             </div>
-
-            <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <h2>Last 50 Messages</h2>
-                    <button onclick="loadMessages()">🔄 Reload</button>
+            
+             <div class="section-card">
+                <div class="card-header">
+                     <h2>Live Browser View</h2>
+                     <span style="font-size: 12px; color: var(--text-secondary);">Auto-updates every 5s</span>
                 </div>
-                <div id="message-log" class="log-list">Loading logs...</div>
+                <div class="screen-wrapper">
+                    <img id="live-screen" src="/screen" alt="Connecting...">
+                </div>
             </div>
         </div>
 
-        <!-- Sidebar: Controls -->
+        <!-- Right Column: Actions -->
         <div>
-            <div class="card">
-                <h2>Controls</h2>
-                <div class="controls">
-                    <button class="danger" onclick="reloadBrowser()">⚠️ Reload Browser Page</button>
-                    <a href="/login-qr" target="_blank"><button style="width: 100%">📱 Open QR Login</button></a>
+            <div class="section-card">
+                <div class="card-header"><h2>Actions</h2></div>
+                <div class="controls-grid">
+                    <button class="tg-button" onclick="document.getElementById('send-form-card').scrollIntoView({behavior: 'smooth'})">
+                        ✏️ New Message
+                    </button>
+                    <a href="/login-qr" target="_blank" class="tg-button secondary">
+                        📱 Open QR Login
+                    </a>
+                     <button class="tg-button danger" onclick="reloadBrowser()">
+                        ⚠️ Reload Browser
+                    </button>
                 </div>
             </div>
 
-            <div class="card" style="margin-top: 20px;">
-                <h2>Send Message</h2>
-                <form id="send-form" onsubmit="sendMessage(event)">
-                    <label>Username (without @)</label>
-                    <input type="text" id="username" placeholder="durov" required>
-                    
-                    <label>Message</label>
-                    <textarea id="message" rows="3" placeholder="Hello there!" required></textarea>
-                    
-                    <button type="submit" class="success" style="width: 100%">Send Message</button>
-                </form>
-                <div id="send-status" style="margin-top: 10px; font-size: 13px;"></div>
+            <div id="send-form-card" class="section-card">
+                <div class="card-header"><h2>Send Message</h2></div>
+                <div class="controls-grid">
+                    <form id="send-form" onsubmit="sendMessage(event)">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" id="username" class="tg-input" placeholder="e.g. durov" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Message</label>
+                            <textarea id="message" rows="3" class="tg-input" placeholder="Type a message..." required></textarea>
+                        </div>
+                        <button type="submit" class="tg-button">Send</button>
+                        <div id="send-status" style="margin-top: 10px; font-size: 13px; text-align: center;"></div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Auto-refresh screen
+        // Start auto-refresh for screen
         setInterval(refreshScreen, 5000);
 
         function refreshScreen() {
@@ -97,13 +314,13 @@ export const adminHtml = `
         }
 
         async function reloadBrowser() {
-            if(!confirm('Are you sure you want to reload the browser page?')) return;
+            if(!confirm('Reload browser page?')) return;
             try {
                 const res = await fetch('/reload');
                 const data = await res.json();
-                alert(data.message || 'Reload command sent');
-                setTimeout(refreshScreen, 2000);
-            } catch(e) { alert('Error reloading: ' + e); }
+                alert(data.message || 'Reloaded');
+                setTimeout(refreshScreen, 1000);
+            } catch(e) { alert('Error: ' + e); }
         }
 
         async function sendMessage(e) {
@@ -114,9 +331,9 @@ export const adminHtml = `
             const message = document.getElementById('message').value;
 
             btn.disabled = true;
-            btn.textContent = 'Sending...';
-            status.textContent = '';
-            status.style.color = '#94a3b8';
+            btn.style.opacity = '0.7';
+            status.textContent = 'Sending...';
+            status.style.color = 'var(--text-secondary)';
 
             try {
                 const res = await fetch('/send', {
@@ -127,21 +344,38 @@ export const adminHtml = `
                 const data = await res.json();
                 
                 if(data.success) {
-                    status.textContent = '✅ Sent!';
-                    status.style.color = 'var(--success)';
+                    status.textContent = '✅ Message sent';
+                    status.style.color = 'var(--accent-green)';
                     document.getElementById('message').value = '';
                     loadMessages();
                 } else {
-                    status.textContent = '❌ Error: ' + (data.details || data.error);
-                    status.style.color = 'var(--danger)';
+                    status.textContent = '❌ ' + (data.details || data.error);
+                    status.style.color = 'var(--accent-red)';
                 }
             } catch(e) {
                 status.textContent = '❌ Network Error';
-                status.style.color = 'var(--danger)';
+                status.style.color = 'var(--accent-red)';
             } finally {
                 btn.disabled = false;
-                btn.textContent = 'Send Message';
+                btn.style.opacity = '1';
             }
+        }
+
+        function getInitials(name) {
+            return name ? name.substring(0, 2).toUpperCase() : '??';
+        }
+
+        function getRandomColor(name) {
+            const colors = [
+                'linear-gradient(135deg, #FF9966 0%, #FF5E62 100%)', // Orange
+                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', // Purple
+                'linear-gradient(135deg, #66a6ff 0%, #89f7fe 100%)', // Blue
+                'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)', // Green
+                'linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%)'  // Yellow/Red
+            ];
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            return colors[Math.abs(hash) % colors.length];
         }
 
         async function loadMessages() {
@@ -153,34 +387,40 @@ export const adminHtml = `
                 if(data.messages && data.messages.length > 0) {
                     log.innerHTML = data.messages.map(m => {
                         const isOut = m.sender === 'SIMULATOR';
-                        const badgeClass = isOut ? 'out' : 'in';
-                        const badgeText = isOut ? 'OUT' : 'IN';
                         const user = m.dialogue?.user?.username || m.dialogue?.user?.firstName || 'Unknown';
-                        const time = new Date(m.createdAt).toLocaleTimeString();
+                        const time = new Date(m.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        const initials = getInitials(user);
+                        const bg = getRandomColor(user);
+                        
                         return \`
-                            <div class="log-item">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                                    <span><span class="badge \${badgeClass}">\${badgeText}</span> <strong>@\${user}</strong></span>
-                                    <span style="color: #94a3b8">\${time}</span>
+                            <div class="chat-item">
+                                <div class="avatar" style="background: \${bg} !important">\${initials}</div>
+                                <div class="chat-content">
+                                    <div class="chat-header">
+                                        <span class="chat-name">\${user}</span>
+                                        <span class="chat-time">\${time}</span>
+                                    </div>
+                                    <div class="chat-preview">
+                                        <span>\${isOut ? 'You: ' : ''}\${m.text}</span>
+                                        \${isOut ? '' : '<span class="badge">NEW</span>'}
+                                    </div>
                                 </div>
-                                <div style="color: #cbd5e1">\${m.text}</div>
                             </div>
                         \`;
                     }).join('');
                 } else {
-                    log.innerHTML = '<div style="padding: 10px; color: #94a3b8">No messages found</div>';
+                    log.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No messages history yet</div>';
                 }
             } catch(e) {
-                log.innerHTML = '<div style="padding: 10px; color: var(--danger)">Failed to load messages</div>';
+                console.error(e);
+                log.innerText = 'Failed to load messages.';
             }
         }
 
-        // Initial load
+        // Init
         loadMessages();
-        
-        // Check server status
         fetch('/').then(r => r.json()).then(d => {
-            if(d.browserStatus) document.getElementById('browser-status').textContent = 'Browser: ' + d.browserStatus;
+            if(d.browserStatus) document.getElementById('browser-status').textContent = d.browserStatus;
         }).catch(() => {});
     </script>
 </body>
