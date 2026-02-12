@@ -31,9 +31,20 @@ export async function loginWithPhone(page: Page, phoneNumber: string) {
     // 1. Click "Log in by phone Number" if visible
     console.log('[Auth] Looking for "Phone Number" button...');
     try {
-        const clicked = await page.evaluate(() => {
+        // Log all buttons for debugging
+        const buttonInfo = await page.evaluate(() => {
             const buttons = Array.from(document.querySelectorAll('button'));
-            const phoneBtn = buttons.find(b => b.textContent && b.textContent.toLowerCase().includes('phone number'));
+            return buttons.map(b => ({ text: b.textContent || '', className: b.className }));
+        });
+        console.log('[Auth] Visible buttons:', JSON.stringify(buttonInfo));
+
+        // Strategy 1: Text match
+        let clicked = await page.evaluate(() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            const phoneBtn = buttons.find(b => {
+                const text = (b.textContent || '').toLowerCase();
+                return text.includes('phone') || text.includes('number') || text.includes('телефон');
+            });
             if (phoneBtn) {
                 phoneBtn.click();
                 return true;
@@ -42,13 +53,29 @@ export async function loginWithPhone(page: Page, phoneNumber: string) {
         });
 
         if (clicked) {
-            console.log('[Auth] Clicked "Phone Number" button via evaluate');
-            await new Promise(r => setTimeout(r, 1000));
-            await screenshot(page, 'clicked_phone_button');
+            console.log('[Auth] Clicked "Phone Number" button via text match');
+            await new Promise(r => setTimeout(r, 1500)); // Wait for transition
+            await screenshot(page, 'clicked_phone_button_text');
         } else {
-            console.log('[Auth] "Phone Number" button not found via evaluate. Checking if input is already present.');
-        }
+            console.log('[Auth] Text match failed. Trying CSS strategy...');
+            // Strategy 2: CSS class (often .btn-primary.btn-secondary or similar for the secondary action)
+            clicked = await page.evaluate(() => {
+                const btn = document.querySelector('button.btn-secondary, button.btn-transparent');
+                if (btn) {
+                    (btn as HTMLElement).click();
+                    return true;
+                }
+                return false;
+            });
 
+            if (clicked) {
+                console.log('[Auth] Clicked button via CSS strategy');
+                await new Promise(r => setTimeout(r, 1500));
+                await screenshot(page, 'clicked_phone_button_css');
+            } else {
+                console.log('[Auth] No suitable button found. Checking if input is already visible...');
+            }
+        }
     } catch (e) {
         console.log('[Auth] Error trying to click phone button:', e);
     }
