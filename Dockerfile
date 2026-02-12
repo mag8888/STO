@@ -54,4 +54,5 @@ RUN npm run build
 EXPOSE 3000
 
 # Start command
-CMD ["node", "dist/server.js"]
+# Start command with DB migration
+CMD ["sh", "-c", "npx prisma db push && node dist/server.js"]
