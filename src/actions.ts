@@ -174,9 +174,11 @@ export async function openChat(page: Page, username: string): Promise<string> {
 
                 let element = handle.asElement() as any;
 
-                // Fallback: search result item
+                // Fallback: search result item (try generic list items)
                 if (!element) {
-                    element = await page.$('.search-result'); // click first result
+                    // Web K often uses .chat-item or simply div/a in .chat-list
+                    // We pick the first one which should be the best match
+                    element = await page.$('.chat-list a, .chat-list .chat-item, .sidebar-body .chat-item, .search-results .peer-item');
                 }
 
                 if (element) {
