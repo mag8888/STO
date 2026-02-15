@@ -1,143 +1,67 @@
+import 'dotenv/config';
 import Fastify from 'fastify';
-import fs from 'fs';
 import path from 'path';
-import { initBrowser, closeBrowser, getBrowserInstance } from './browser';
-import { sendMessageToUser, checkLogin, startDialogue } from './actions';
-import prisma from './db';
+import fastifyStatic from '@fastify/static';
+import fastifyCors from '@fastify/cors';
+import { PrismaClient } from '@prisma/client';
 
-import { adminHtml } from './admin_html';
-
+const prisma = new PrismaClient();
 const fastify = Fastify({ logger: true });
 
-interface SendMessageBody {
-    username: string;
-    message: string;
+// Enable CORS
+fastify.register(fastifyCors, { origin: true });
+
+// Simple in-memory log buffer
+const logBuffer: string[] = [];
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+function addToLog(type: string, args: any[]) {
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+    // Strip ANSI codes
+    const cleanMsg = msg.replace(/\u001b\[[0-9;]*m/g, '');
+    const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+    logBuffer.unshift(`[${timestamp}] [${type}] ${cleanMsg}`);
+    if (logBuffer.length > 50) logBuffer.pop();
 }
 
-interface StartDialogueBody {
-    username: string;
-    referrer: string;
-    topic: string;
-}
+console.log = (...args) => {
+    addToLog('INFO', args);
+    originalConsoleLog.apply(console, args);
+};
 
-interface LoginPhoneBody { phone: string; }
-interface LoginCodeBody { code: string; }
+console.error = (...args) => {
+    addToLog('ERROR', args);
+    originalConsoleError.apply(console, args);
+};
 
-// Debug status
-let browserStatus = 'not-started';
-
-fastify.get('/', async (request, reply) => {
-    // Return HTML Admin Panel
-    return reply.type('text/html').send(adminHtml);
+fastify.get('/logs', async (req, reply) => {
+    return logBuffer;
 });
 
-fastify.get('/reload', async (request, reply) => {
-    const { page } = getBrowserInstance();
-    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
+// Serve frontend
+// fastify.register(fastifyStatic, {
+//     root: path.join(__dirname, '../frontend/dist'),
+//     prefix: '/',
+// });
 
-    try {
-        await page.reload({ waitUntil: 'domcontentloaded' });
-        return { success: true, message: 'Page reloaded' };
-    } catch (e) {
-        return reply.code(500).send({ error: 'Reload failed', details: (e as Error).message });
-    }
+// Serve static files from public directory
+fastify.register(fastifyStatic, {
+    root: path.join(__dirname, '../public'),
+    prefix: '/',
 });
 
-fastify.get('/screen', async (request, reply) => {
-    const { page } = getBrowserInstance();
-    if (!page) {
-        return reply.code(500).send({ error: 'Browser not initialized' });
-    }
-
-    try {
-        const screenshotPath = path.join(process.cwd(), 'current_screen.png');
-        await page.screenshot({ path: screenshotPath });
-
-        const stream = fs.createReadStream(screenshotPath);
-        return reply.type('image/png').send(stream);
-    } catch (err) {
-        request.log.error(err);
-        return reply.code(500).send({ error: 'Failed to take screenshot', details: (err as Error).message });
-    }
+// Route root to admin_panel
+fastify.get('/', (req, reply) => {
+    reply.sendFile('admin_panel.html');
 });
 
-fastify.get('/reset-session', async (request, reply) => {
-    try {
-        console.log('Resetting session...');
-
-        // Stop listener first to prevent detached frame errors
-        try {
-            // Dynamic import to avoid circular dependency issues at top level if any
-            const { stopListener } = await import('./listener');
-            if (stopListener) stopListener();
-        } catch (e) { console.error('Error stopping listener:', e); }
-
-        await closeBrowser();
-
-        const sessionDir = path.join(process.cwd(), 'session_data');
-        if (fs.existsSync(sessionDir)) {
-            try {
-                fs.rmSync(sessionDir, { recursive: true, force: true });
-            } catch (e) {
-                console.error('Failed to delete session directory (might be locked):', e);
-            }
-        }
-
-        // Restart browser and listener
-        setTimeout(() => {
-            initBrowser().then(async ({ page }) => {
-                if (page) {
-                    console.log('Restarting listener...');
-                    const { startListener } = await import('./listener');
-                    startListener(page);
-                }
-            }).catch(console.error);
-        }, 1000);
-
-        return { success: true, message: 'Session reset. Browser restarting...' };
-    } catch (err) {
-        return reply.code(500).send({ error: 'Failed to reset session', details: (err as Error).message });
-    }
-});
-
-fastify.get('/login-qr', async (request, reply) => {
-    // Refresh screenshot if page is available
-    const { page } = getBrowserInstance();
-    if (page) {
-        try {
-            await page.screenshot({ path: path.join(process.cwd(), 'login_status.png') });
-        } catch (e) {
-            console.error("Failed to refresh login screenshot:", e);
-        }
-    }
-
-    const imagePath = path.join(process.cwd(), 'login_status.png');
-    if (fs.existsSync(imagePath)) {
-        const stream = fs.createReadStream(imagePath);
-        return reply.type('image/png').send(stream);
-    } else {
-        // Debug: List files in current directory to see what's going on
-        const files = fs.readdirSync(process.cwd());
-        return reply.code(404).send({
-            error: 'QR code not found yet.',
-            browserStatus,
-            cwd: process.cwd(),
-            files: files.filter(f => f.endsWith('.png') || f.endsWith('.json')),
-            message: 'Browser might still be initializing or failed.'
-        });
-    }
-});
+// API Routes
 
 fastify.get('/messages', async (request, reply) => {
     try {
         const messages = await prisma.message.findMany({
-            include: {
-                dialogue: {
-                    include: {
-                        user: true
-                    }
-                }
-            },
+            include: { dialogue: { include: { user: true } } },
             orderBy: { createdAt: 'desc' },
             take: 50
         });
@@ -147,193 +71,216 @@ fastify.get('/messages', async (request, reply) => {
     }
 });
 
-fastify.post<{ Body: SendMessageBody }>('/send', async (request, reply) => {
-    const { username, message } = request.body;
-
-    if (!username || !message) {
-        return reply.code(400).send({ error: 'Username and message are required' });
-    }
-
-    const { page } = await initBrowser();
-
-    if (!page) {
-        return reply.code(500).send({ error: 'Browser not initialized' });
-    }
-
+fastify.get('/dialogues', async (request, reply) => {
     try {
-        const isLoggedIn = await checkLogin(page);
-        if (!isLoggedIn) {
-            // Try to reload to see if it fixes it
-            await page.reload({ waitUntil: 'networkidle0' });
-            const stillLoggedIn = await checkLogin(page);
-            if (!stillLoggedIn) {
-                return reply.code(401).send({ error: 'Telegram not logged in. Please check the browser window.' });
-            }
-        }
-
-        await sendMessageToUser(page, username, message);
-        return { success: true, message: `Sent to @${username}` };
-    } catch (err) {
-        request.log.error(err);
-        return reply.code(500).send({ error: 'Failed to send message', details: (err as Error).message });
-    }
-});
-
-fastify.post<{ Body: StartDialogueBody }>('/start-dialogue', async (request, reply) => {
-    const { username, referrer, topic } = request.body;
-
-    if (!username || !referrer || !topic) {
-        return reply.code(400).send({ error: 'Username, referrer, and topic are required' });
-    }
-
-    const { page } = await initBrowser();
-
-    if (!page) {
-        return reply.code(500).send({ error: 'Browser not initialized' });
-    }
-
-    try {
-        const isLoggedIn = await checkLogin(page);
-        if (!isLoggedIn) {
-            return reply.code(401).send({ error: 'Telegram not logged in. Please check the browser window.' });
-        }
-
-        const result = await startDialogue(page, username, referrer, topic);
-        return result;
-    } catch (err) {
-        request.log.error(err);
-        return reply.code(500).send({ error: 'Failed to start dialogue', details: (err as Error).message });
-    }
-});
-
-fastify.post<{ Body: LoginPhoneBody }>('/login-phone', async (request, reply) => {
-    const { phone } = request.body;
-    if (!phone) return reply.code(400).send({ error: 'Phone number required' });
-
-    const { page } = await initBrowser();
-    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
-
-    try {
-        const { loginWithPhone } = await import('./auth_actions');
-        await loginWithPhone(page, phone);
-        return { success: true, message: 'Code requested. Please check your Telegram/SMS.' };
-    } catch (err) {
-        return reply.code(500).send({ error: 'Failed to request code', details: (err as Error).message });
-    }
-});
-
-fastify.post<{ Body: LoginCodeBody }>('/login-code', async (request, reply) => {
-    const { code } = request.body;
-    if (!code) return reply.code(400).send({ error: 'Code required' });
-
-    const { page } = await initBrowser();
-    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
-
-    try {
-        const { submitVerificationCode } = await import('./auth_actions');
-        await submitVerificationCode(page, code);
-
-        // Start listener immediately after successful login
-        const { startListener } = await import('./listener');
-        startListener(page);
-
-    } catch (err) {
-        return reply.code(500).send({ error: 'Failed to submit code', details: (err as Error).message });
-    }
-});
-
-interface LoginPasswordBody { password: string; }
-
-fastify.post<{ Body: LoginPasswordBody }>('/login-password', async (request, reply) => {
-    const { password } = request.body;
-    if (!password) return reply.code(400).send({ error: 'Password required' });
-
-    const { page } = await initBrowser();
-    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
-
-    try {
-        const { submitPassword } = await import('./auth_actions');
-        await submitPassword(page, password);
-
-        // Start listener immediately after successful login
-        const { startListener } = await import('./listener');
-        startListener(page);
-
-        return { success: true, message: 'Login successful (2FA)! Listener started.' };
-    } catch (err) {
-        return reply.code(500).send({ error: 'Failed to submit password', details: (err as Error).message });
-    }
-});
-
-interface ImportSessionBody { sessionJson: string; }
-
-fastify.post<{ Body: ImportSessionBody }>('/import-session', async (request, reply) => {
-    const { sessionJson } = request.body;
-    if (!sessionJson) return reply.code(400).send({ error: 'Session JSON required' });
-
-    let sessionData;
-    try {
-        sessionData = JSON.parse(sessionJson);
+        const dialogues = await prisma.dialogue.findMany({
+            where: { status: 'ACTIVE' },
+            include: {
+                user: true,
+                messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+            },
+            orderBy: { updatedAt: 'desc' }
+        });
+        return dialogues;
     } catch (e) {
-        return reply.code(400).send({ error: 'Invalid JSON format' });
-    }
-
-    const { page } = await initBrowser();
-    if (!page) return reply.code(500).send({ error: 'Browser not initialized' });
-
-    try {
-        const { injectSession } = await import('./auth_actions');
-        await injectSession(page, sessionData);
-
-        // Start listener immediately after successful login
-        const { startListener } = await import('./listener');
-        startListener(page);
-
-        return { success: true, message: 'Session injected successfully! Reloading...' };
-    } catch (err) {
-        return reply.code(500).send({ error: 'Failed to inject session', details: (err as Error).message });
+        request.log.error(e);
+        return [];
     }
 });
 
+fastify.get('/dialogues/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        const dialogue = await prisma.dialogue.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                user: true,
+                messages: { orderBy: { createdAt: 'asc' } }
+            }
+        });
+        return dialogue;
+    } catch (e) {
+        return reply.code(404).send({ error: 'Dialogue not found' });
+    }
+});
+
+fastify.get('/status', async (request, reply) => {
+    try {
+        const { getClient } = await import('./client');
+        const client = getClient();
+        const connected = client ? client.connected : false;
+        let me = null;
+        if (connected) {
+            // Basic cache or fetch
+            try { me = await client.getMe(); } catch (e) { }
+        }
+        return { connected, me };
+    } catch (err) {
+        return { connected: false, error: err };
+    }
+});
+
+fastify.post('/send', async (request, reply) => {
+    const { username, message } = request.body as { username: string, message: string };
+    if (!username || !message) return reply.code(400).send({ error: 'Missing fields' });
+
+    try {
+        const { sendMessageToUser } = await import('./actions');
+        // page is null
+        await sendMessageToUser(null, username, message);
+        return { success: true };
+    } catch (e: any) {
+        return reply.code(500).send({ error: e.message });
+    }
+});
+
+// --- Knowledge Base Routes ---
+
+fastify.get('/kb', async (req, reply) => {
+    try {
+        const items = await prisma.knowledgeItem.findMany({
+            orderBy: { createdAt: 'desc' }
+        });
+        return items;
+    } catch (e) { return []; }
+});
+
+fastify.post('/kb', async (req, reply) => {
+    const { question, answer } = req.body as { question: string, answer: string };
+    if (!question || !answer) return reply.code(400).send({ error: 'Missing fields' });
+    try {
+        const item = await prisma.knowledgeItem.create({
+            data: { question, answer }
+        });
+        return item;
+    } catch (e) { return reply.code(500).send(e); }
+});
+
+// Candidates
+fastify.get('/kb/candidates', async (req, reply) => {
+    try {
+        const items = await prisma.learningCandidate.findMany({
+            where: { status: 'PENDING' },
+            orderBy: { createdAt: 'desc' }
+        });
+        return items;
+    } catch (e) { return []; }
+});
+
+fastify.post('/kb/candidates/:id/approve', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        // 1. Get candidate
+        const candidate = await prisma.learningCandidate.findUnique({ where: { id: parseInt(id) } });
+        if (!candidate) return reply.code(404).send({ error: 'Not found' });
+
+        // 2. Create KB Item
+        await prisma.knowledgeItem.create({
+            data: {
+                question: candidate.originalQuestion,
+                answer: candidate.operatorAnswer
+            }
+        });
+
+        // 3. Mark candidate as MERGED
+        await prisma.learningCandidate.update({
+            where: { id: parseInt(id) },
+            data: { status: 'MERGED' }
+        });
+
+        return { success: true };
+    } catch (e) { return reply.code(500).send(e); }
+});
+
+// --- Templates Routes ---
+fastify.get('/templates', async (req, reply) => {
+    // Mock templates for now, or add DB model if needed
+    return [
+        { id: 1, name: 'Greeting', content: 'Привет! Чем могу помочь?' },
+        { id: 2, name: 'Services', content: 'Мы предлагаем услуги продвижения...' },
+        { id: 3, name: 'Price', content: 'Наши цены начинаются от...' }
+    ];
+});
+
+fastify.post('/messages/:id/approve', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const { updatedText } = request.body as { updatedText?: string };
+
+    try {
+        const { sendDraftMessage } = await import('./actions');
+        const result = await sendDraftMessage(null, parseInt(id), updatedText);
+        return result;
+    } catch (err: any) {
+        request.log.error(err);
+        return reply.code(500).send({ error: 'Failed to approve message', details: err.message });
+    }
+});
+
+fastify.put('/users/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { firstName, lastName } = req.body as { firstName?: string, lastName?: string };
+
+    try {
+        const user = await prisma.user.update({
+            where: { id: parseInt(id) },
+            data: { firstName, lastName }
+        });
+        return user;
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to update user' });
+    }
+});
+
+fastify.post('/scan-chat', async (req, reply) => {
+    const { chatLink, limit } = req.body as { chatLink: string, limit?: number };
+    if (!chatLink) return reply.code(400).send({ error: 'Missing chatLink' });
+
+    try {
+        const { scanChatForLeads } = await import('./actions');
+        // Extract username from link if needed (e.g. t.me/username -> username)
+        let username = chatLink.replace('https://t.me/', '').replace('@', '').split('/')[0];
+
+        const leads = await scanChatForLeads(username, limit || 50);
+        return leads;
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Scan failed', details: e.message });
+    }
+});
+
+// SPA Fallback - Disabled for Vanilla JS
+// fastify.setNotFoundHandler((req, reply) => {
+//     if (req.raw.url?.startsWith('/api')) {
+//         reply.code(404).send({ error: 'Not Found' });
+//     } else {
+//         reply.sendFile('index.html');
+//     }
+// });
 
 const start = async () => {
     try {
-        console.log('Starting server and browser...');
-        // Verify DB connection
+        console.log('Starting server...');
         await prisma.$connect();
-        console.log('Connected to Database');
 
         const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
         await fastify.listen({ port, host: '0.0.0.0' });
         console.log(`Server listening on http://0.0.0.0:${port}`);
 
-        // Initialize browser after server is up to avoid deployment timeouts
-        browserStatus = 'initializing';
-        initBrowser().then(async ({ page }) => {
-            console.log('Browser initialized successfully');
-            browserStatus = 'ready';
+        // Initialize GramJS
+        const { initClient } = await import('./client');
+        await initClient();
 
-            // Start message listener
-            if (page) {
-                const { startListener } = await import('./listener');
-                startListener(page);
-                console.log('Message listener started');
-            }
-        }).catch(err => {
-            console.error('Failed to initialize browser:', err);
-            browserStatus = 'failed: ' + err.message;
-        });
+        const client = await import('./client').then(m => m.getClient());
+        if (client) {
+            console.log("GramJS Client initialized. Starting listener...");
+            const { startListener } = await import('./listener');
+            startListener(null);
+        }
+
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);
     }
 };
-
-process.on('SIGINT', async () => {
-    console.log('Shutting down...');
-    await closeBrowser();
-    await prisma.$disconnect();
-    process.exit(0);
-});
 
 start();

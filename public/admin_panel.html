@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Marketing Admin</title>
+    <link rel="stylesheet" href="/style.css">
+    <!-- Ionicons for Icons -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <ion-icon name="paper-plane"></ion-icon>
+            <span>TeleMarketing</span>
+        </div>
+
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a class="nav-link active" onclick="switchView('dashboard')">
+                    <ion-icon name="grid-outline"></ion-icon> Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('inbox')">
+                    <ion-icon name="chatbubbles-outline"></ion-icon> Inbox
+                    <!-- <span class="badge blue">3</span> -->
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('leads')">
+                    <ion-icon name="people-outline"></ion-icon> Leads
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('broadcasts')">
+                    <ion-icon name="megaphone-outline"></ion-icon> Broadcasts
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('kb')">
+                    <ion-icon name="library-outline"></ion-icon> Knowledge Base
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('templates')">
+                    <ion-icon name="document-text-outline"></ion-icon> Templates
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('settings')">
+                    <ion-icon name="settings-outline"></ion-icon> Settings
+                </a>
+            </li>
+        </ul>
+
+        <div class="status-indicator">
+            <span class="status-dot" id="system-status-dot"></span> <span id="system-status-text">Checking...</span>
+            <div id="auth-section" style="margin-top: 10px; display: none;">
+                <button class="btn btn-primary" style="width: 100%; font-size: 0.8rem;" onclick="startAuthFlow()">Login
+                    / Scan QR</button>
+            </div>
+            <div id="user-info"
+                style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary); display: none;">
+                Logged in as: <span id="username-display" style="color: var(--primary);">...</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view-container active">
+            <div class="view-header">
+                <h1 class="view-title">Overview</h1>
+                <button class="btn btn-primary" onclick="refreshStats()">Refresh</button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Leads</div>
+                    <div class="stat-value" id="stat-leads-count">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Messages Sent</div>
+                    <div class="stat-value" id="stat-msg-sent">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Dialogues</div>
+                    <div class="stat-value" id="stat-active-dialogues">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Pending Drafts</div>
+                    <div class="stat-value" id="stat-pending-drafts">-</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity Table Placeholder -->
+            <div class="stat-card">
+                <div class="stat-label">System Logs (Recent)</div>
+                <div style="color: var(--text-secondary); margin-top: 1rem; font-family: monospace;" id="mini-logs">
+                    Loading logs...
+                </div>
+            </div>
+        </div>
+
+        <!-- Inbox View -->
+        <div id="inbox-view">
+            <div class="chat-list-panel">
+                <div class="chat-list-header">
+                    <input type="text" class="search-input" placeholder="Search chats..." id="chat-search">
+                </div>
+                <div class="chat-items" id="chat-list">
+                    <!-- Chat Items Injected Here -->
+                    <div style="padding:1rem; color: var(--text-secondary);">Loading chats...</div>
+                </div>
+            </div>
+
+            <div class="chat-detail-panel">
+                <div class="chat-header" id="chat-header">
+                    <div id="active-chat-name">Select a chat</div>
+                    <div id="chat-actions">
+                        <!-- Actions like Approve Draft -->
+                    </div>
+                </div>
+
+                <div class="messages-area" id="messages-area" onscroll="handleScroll()">
+                    <!-- Messages Injected Here -->
+                </div>
+                <button id="scroll-btn" class="btn btn-secondary"
+                    style="position:absolute; bottom:80px; right:20px; z-index:100; display:none; border-radius:50%; width:40px; height:40px; justify-content:center; align-items:center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+                    onclick="scrollToBottom()">
+                    <ion-icon name="arrow-down-outline" style="font-size:1.2rem;"></ion-icon>
+                </button>
+
+                <div class="input-area" style="position:relative;">
+                    <div id="edit-indicator"
+                        style="display:none; position:absolute; top:-30px; left:1rem; background:var(--bg-card); border:1px solid var(--primary); padding:0.2rem 0.5rem; border-radius:4px; font-size:0.8rem; align-items:center; gap:0.5rem;">
+                        <span>Editing draft...</span>
+                        <ion-icon name="close-circle" style="cursor:pointer;" onclick="cancelEdit()"></ion-icon>
+                    </div>
+                    <textarea class="message-input" placeholder="Type a message..." id="message-input" rows="3"
+                        style="resize:none; padding: 0.5rem;" onkeypress="handleEnter(event)"></textarea>
+                    <button class="btn btn-primary" onclick="sendManualMessage()"
+                        style="height: fit-content; align-self: flex-end;">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leads View -->
+        <div id="leads-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">Leads Database</h1>
+                <button class="btn btn-primary">Export CSV</button>
+            </div>
+
+            <!-- Scanner -->
+            <div class="stat-card" style="margin-bottom: 1rem;">
+                <h3><ion-icon name="scan-outline"></ion-icon> Scan External Chat</h3>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                    <input type="text" id="scan-input" class="message-input" placeholder="@username or t.me/link"
+                        style="flex:1;">
+                    <button class="btn btn-primary" onclick="scanChat()">Scan</button>
+                </div>
+                <div id="scan-results" style="margin-top: 1rem; display: none;">
+                    <h4>Potential Leads Found:</h4>
+                    <div id="scan-list"
+                        style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; margin-top: 0.5rem;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-card" style="padding: 0; overflow: hidden;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Username</th>
+                            <th>Status</th>
+                            <th>Tags</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leads-table-body">
+                        <!-- Leads injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Broadcasts View -->
+        <div id="broadcasts-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">Campaigns</h1>
+                <button class="btn btn-primary">New Campaign</button>
+            </div>
+            <div class="stat-card">
+                <p style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                    Broadcast functionality coming soon.
+                </p>
+            </div>
+        </div>
+
+        <!-- Templates View (Placeholder) -->
+        <div id="templates-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">Follow-up Templates</h1>
+                <button class="btn btn-primary" onclick="loadTemplates()">Reload</button>
+            </div>
+            <div id="templates-list"
+                style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+                <!-- Templates injected here -->
+            </div>
+        </div>
+
+        <!-- Knowledge Base View -->
+        <div id="kb-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">Knowledge Base</h1>
+                <button class="btn btn-primary" onclick="createKBItem()">+ Add Item</button>
+            </div>
+
+            <div style="display:flex; gap:1rem; height: 100%;">
+                <!-- Active Items -->
+                <div style="flex:2; overflow-y:auto;">
+                    <h3>Active Q&A</h3>
+                    <div id="kb-list" style="margin-top:1rem; display: flex; flex-direction:column; gap:1rem;">
+                        <!-- KB Items -->
+                    </div>
+                </div>
+
+                <!-- Learning Queue -->
+                <div style="flex:1; background: var(--bg-card); padding:1rem; border-radius:1rem; overflow-y:auto;">
+                    <h3>Learning Queue</h3>
+                    <p style="font-size:0.8rem; color: var(--text-secondary); margin-bottom:1rem;">
+                        Candidates from operator replies.
+                    </p>
+                    <div id="learning-list" style="display: flex; flex-direction:column; gap:1rem;">
+                        <!-- Candidates -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">System Settings</h1>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Browser Session</div>
+                    <div style="margin-top: 1rem;">
+                        <div id="login-status-text" style="margin-bottom: 1rem;">Checking status...</div>
+                        <img id="qr-code-img" style="max-width: 200px; display: none; border-radius: 0.5rem;" />
+                    </div>
+                    <button class="btn btn-secondary" style="margin-top: 1rem;" onclick="refreshLoginStatus()">Check
+                        Login</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- State ---
+        let dialogues = [];
+        let currentDialogueId = null;
+
+        // --- Navigation ---
+        function switchView(viewId) {
+            // Hide all views
+            document.querySelectorAll('.view-container, #inbox-view').forEach(el => {
+                el.classList.remove('active');
+                if (el.id === 'inbox-view') el.style.display = 'none';
+            });
+
+            // Show selected view
+            const target = document.getElementById(viewId + '-view');
+            if (viewId === 'inbox') {
+                target.style.display = 'flex';
+                // Reload dialogues when entering inbox
+                loadDialogues();
+            }
+            target.classList.add('active');
+
+            // Update Nav link
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.nav-link[onclick="switchView('${viewId}')"]`).classList.add('active');
+        }
+
+        // --- Dashboard Stats ---
+        async function refreshStats() {
+            try {
+                // Fetch stats from backend (using existing endpoints or new ones)
+                const res = await fetch('/dialogues');
+                const data = await res.json();
+
+                document.getElementById('stat-active-dialogues').textContent = data.length || 0;
+
+                // Calculate drafts
+                let drafts = 0;
+                let sent = 0;
+                data.forEach(d => {
+                    const lastMsg = d.messages[0];
+                    if (lastMsg && lastMsg.status === 'DRAFT') drafts++;
+
+                    d.messages.forEach(m => {
+                        if (m.sender === 'OPERATOR' || m.sender === 'SIMULATOR') sent++;
+                    });
+                });
+                document.getElementById('stat-pending-drafts').textContent = drafts;
+                document.getElementById('stat-msg-sent').textContent = sent; // Approximate
+                document.getElementById('stat-leads-count').textContent = data.length; // Approximate leads as dialogues for now
+
+                // Fetch Logs
+                const logsRes = await fetch('/logs');
+                const logs = await logsRes.json();
+                const logsContainer = document.getElementById('mini-logs');
+                if (logs.length > 0) {
+                    logsContainer.innerHTML = logs.map(l => `<div style="margin-bottom:0.25rem;">${l}</div>`).join('');
+                } else {
+                    logsContainer.textContent = 'No recent logs.';
+                }
+            } catch (e) {
+                console.error("Stats error", e);
+                document.getElementById('mini-logs').textContent = 'Failed to load stats/logs.';
+            }
+        }
+
+        // --- Inbox Logic ---
+        async function loadDialogues() {
+            try {
+                const res = await fetch('/dialogues');
+                const data = await res.json();
+                dialogues = data;
+                renderChatList(data);
+            } catch (e) {
+                console.error("Failed to load dialogues", e);
+            }
+        }
+
+        function renderChatList(list) {
+            const container = document.getElementById('chat-list');
+            container.innerHTML = '';
+
+            list.forEach(d => {
+                const div = document.createElement('div');
+                div.className = `chat-item ${currentDialogueId === d.id ? 'active' : ''}`;
+                div.onclick = () => selectChat(d.id);
+
+                const lastMsg = d.messages[0];
+                const previewText = lastMsg ? lastMsg.text : 'No messages';
+                const isDraft = lastMsg && lastMsg.status === 'DRAFT';
+
+                // Format Name + Username
+                const name = d.user.firstName || 'Unknown';
+                const username = d.user.username ? `@${d.user.username}` : '';
+                const displayName = username ? `${name} <span style="font-size:0.8em; color:var(--text-secondary);">${username}</span>` : name;
+
+                div.innerHTML = `
+                    <div class="chat-name">
+                        ${displayName}
+                        ${isDraft ? '<span class="badge blue" style="float:right; font-size: 0.6rem;">DRAFT</span>' : ''}
+                    </div>
+                    <div class="chat-preview">${previewText}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function selectChat(id) {
+            currentDialogueId = id;
+
+            // Highlight in list
+            document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+
+            // Fetch full details
+            try {
+                const res = await fetch(`/dialogues/${id}`);
+                const dialogue = await res.json();
+
+                if (!dialogue) return;
+
+                renderChatHeader(dialogue.user);
+                renderMessages(dialogue.messages);
+            } catch (e) {
+                console.error("Failed to load chat details", e);
+            }
+        }
+
+        function renderChatHeader(user) {
+            const container = document.getElementById('active-chat-name');
+            const name = user.firstName || 'Unknown';
+            const lastName = user.lastName || '';
+            const fullName = [name, lastName].filter(Boolean).join(' ');
+            const username = user.username ? `@${user.username}` : '';
+
+            container.innerHTML = `
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <span id="chat-title-text" style="font-weight:600;">${fullName}</span>
+                    <span style="font-size:0.8em; color:var(--text-secondary);">${username}</span>
+                    <button class="btn btn-secondary" style="padding:0.1rem 0.3rem; font-size:0.7rem;" onclick="startEditName(${user.id}, '${name.replace(/'/g, "\\'")}', '${lastName.replace(/'/g, "\\'")}')">
+                        <ion-icon name="pencil-outline"></ion-icon>
+                    </button>
+                </div>
+            `;
+        }
+
+        function startEditName(userId, currentFirst, currentLast) {
+            const container = document.getElementById('active-chat-name');
+            container.innerHTML = `
+                <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="text" id="edit-first-name" value="${currentFirst}" placeholder="First Name" style="padding:0.2rem; border-radius:4px; border:1px solid var(--border); width: 120px;">
+                    <input type="text" id="edit-last-name" value="${currentLast}" placeholder="Last Name" style="padding:0.2rem; border-radius:4px; border:1px solid var(--border); width: 120px;">
+                    <button class="btn btn-primary" style="padding:0.2rem 0.5rem; font-size:0.8rem;" onclick="saveName(${userId})">Save</button>
+                    <button class="btn btn-secondary" style="padding:0.2rem 0.5rem; font-size:0.8rem;" onclick="selectChat(${currentDialogueId})">Cancel</button>
+                </div>
+            `;
+        }
+
+        async function saveName(userId) {
+            const first = document.getElementById('edit-first-name').value;
+            const last = document.getElementById('edit-last-name').value;
+
+            try {
+                await fetch(`/users/${userId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName: first, lastName: last })
+                });
+                // Reload chat to update name
+                selectChat(currentDialogueId);
+                // Also reload list to update sidebar (optional, but good)
+                loadDialogues();
+            } catch (e) {
+                alert('Failed to update name');
+            }
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('messages-area');
+            container.innerHTML = '';
+
+            // Messages are typically ASC from backend now
+            // Scroll Logic
+            const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+
+            messages.forEach(m => {
+                const div = document.createElement('div');
+                let type = 'received';
+                if (m.status === 'DRAFT') type = 'draft';
+                else if (m.sender === 'OPERATOR' || m.sender === 'SIMULATOR') type = 'sent';
+
+                div.className = `message-bubble ${type}`;
+                div.textContent = m.text;
+
+                if (type === 'draft') {
+                    const actionDiv = document.createElement('div');
+                    actionDiv.style.marginTop = '0.5rem';
+                    actionDiv.style.display = 'flex';
+                    actionDiv.style.gap = '0.5rem';
+
+                    // Edit Button
+                    const editBtn = document.createElement('button');
+                    editBtn.className = 'btn btn-secondary';
+                    editBtn.style.fontSize = '0.7rem';
+                    editBtn.style.padding = '0.2rem 0.5rem';
+                    editBtn.textContent = 'Edit';
+                    editBtn.onclick = () => editDraft(m.id, m.text);
+
+                    // Approve Button
+                    const sendBtn = document.createElement('button');
+                    sendBtn.className = 'btn btn-primary';
+                    sendBtn.style.fontSize = '0.7rem';
+                    sendBtn.style.padding = '0.2rem 0.5rem';
+                    sendBtn.textContent = 'Send';
+                    sendBtn.onclick = () => approveDraft(m.id, null); // Null means use existing text
+
+                    actionDiv.appendChild(editBtn);
+                    actionDiv.appendChild(sendBtn);
+                    div.appendChild(actionDiv);
+                }
+
+                container.appendChild(div);
+            });
+
+            if (isAtBottom) {
+                container.scrollTop = container.scrollHeight;
+                hideScrollBtn();
+            } else {
+                showScrollBtn();
+            }
+        }
+
+        // --- Editing State ---
+        let editingMessageId = null;
+
+        function cancelEdit() {
+            editingMessageId = null;
+            document.getElementById('message-input').value = '';
+            document.getElementById('edit-indicator').style.display = 'none';
+            document.querySelector('.input-area button').textContent = 'Send';
+        }
+
+        async function editDraft(msgId, currentText) {
+            editingMessageId = msgId;
+            const input = document.getElementById('message-input');
+            input.value = currentText;
+            input.focus();
+
+            // Show indicator
+            const indicator = document.getElementById('edit-indicator');
+            if (indicator) {
+                indicator.style.display = 'flex';
+                indicator.querySelector('span').textContent = `Editing draft #${msgId}`;
+            }
+
+            document.querySelector('.input-area button').textContent = 'Send Draft';
+        }
+
+        async function approveDraft(msgId, updatedText) {
+            try {
+                const body = updatedText ? { updatedText } : {};
+                const res = await fetch(`/messages/${msgId}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const json = await res.json();
+                if (json.id) {
+                    if (currentDialogueId) selectChat(currentDialogueId);
+                } else {
+                    alert('Error: ' + JSON.stringify(json));
+                }
+            } catch (e) {
+                alert('Failed to approve');
+            }
+        }
+
+        async function sendManualMessage() {
+            const text = document.getElementById('message-input').value;
+            if (!currentDialogueId || !text) return;
+
+            // Handle Draft Edit
+            if (editingMessageId) {
+                await approveDraft(editingMessageId, text);
+                cancelEdit();
+                return;
+            }
+
+            const dialogue = dialogues.find(d => d.id === currentDialogueId);
+            const username = dialogue.user.username || dialogue.user.telegramId;
+
+            try {
+                await fetch('/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, message: text })
+                });
+
+                document.getElementById('message-input').value = '';
+                setTimeout(loadDialogues, 2000);
+            } catch (e) {
+                alert('Failed to send');
+            }
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendManualMessage();
+            }
+        }
+
+        // --- Init ---
+        // Load initial data
+        refreshStats();
+        loadTemplates();
+
+        // --- Knowledge Base Logic ---
+        async function loadKB() {
+            // Load Items
+            try {
+                const res = await fetch('/kb');
+                const items = await res.json();
+                const container = document.getElementById('kb-list');
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'stat-card';
+                    card.innerHTML = `
+                    <div style="font-weight:600; margin-bottom:0.5rem; color:var(--primary);">Q: ${item.question}</div>
+                    <div style="color:var(--text-secondary);">A: ${item.answer}</div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (e) { console.error("KB Load error", e); }
+
+            // Load Candidates
+            try {
+                const res = await fetch('/kb/candidates');
+                const candidates = await res.json();
+                const list = document.getElementById('learning-list');
+                list.innerHTML = '';
+                candidates.forEach(c => {
+                    const div = document.createElement('div');
+                    div.style.padding = '0.75rem';
+                    div.style.border = '1px solid var(--border)';
+                    div.style.borderRadius = '0.5rem';
+                    div.innerHTML = `
+                    <div style="font-size:0.85rem; margin-bottom:0.5rem;"><strong>Q:</strong> ${c.originalQuestion}</div>
+                        <div style="font-size:0.85rem; color: var(--text-secondary); margin-bottom:0.5rem;"><strong>A:</strong> ${c.operatorAnswer}</div>
+                        <button class="btn btn-primary" style="font-size:0.7rem; width:100%;" onclick="approveCandidate(${c.id})">Add to KB</button>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch (e) { console.error("Candidates error", e); }
+        }
+
+        async function createKBItem() {
+            const q = prompt("Question:");
+            const a = prompt("Answer:");
+            if (q && a) {
+                await fetch('/kb', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question: q, answer: a })
+                });
+                loadKB();
+            }
+        }
+
+        async function approveCandidate(id) {
+            await fetch(`/kb/candidates/${id}/approve`, { method: 'POST' });
+            loadKB();
+        }
+
+        // Add KB load to switchView
+        const _origSwitchView = switchView;
+        switchView = function (viewId) {
+            _origSwitchView(viewId);
+            if (viewId === 'kb') loadKB();
+        }
+
+        // Templates (Mock logic for now)
+        async function loadTemplates() {
+            const res = await fetch('/templates');
+            const data = await res.json();
+            const container = document.getElementById('templates-list');
+            container.innerHTML = '';
+            data.forEach(t => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.innerHTML = `<div class="stat-label">${t.name}</div><div>${t.content}</div>`;
+                container.appendChild(card);
+            });
+        }
+
+        // Login Status
+        async function checkSystemStatus() {
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+
+                const dot = document.getElementById('system-status-dot');
+                const text = document.getElementById('system-status-text');
+                const authSection = document.getElementById('auth-section');
+                const userInfo = document.getElementById('user-info');
+                const userDisplay = document.getElementById('username-display');
+
+                if (data.connected) {
+                    dot.className = 'status-dot green';
+                    text.textContent = 'Online';
+                    authSection.style.display = 'none';
+                    userInfo.style.display = 'block';
+                    if (data.me) {
+                        userDisplay.textContent = data.me.firstName || data.me.username || 'User';
+                    }
+                } else {
+                    dot.className = 'status-dot red';
+                    text.textContent = 'Disconnected';
+                    authSection.style.display = 'block';
+                    userInfo.style.display = 'none';
+                }
+            } catch (e) {
+                console.error("Status check failed", e);
+                document.getElementById('system-status-text').textContent = 'Backend Offline';
+                document.getElementById('system-status-dot').className = 'status-dot red';
+            }
+        }
+
+        async function startAuthFlow() {
+            // For now, prompt user to check terminal or implement QR flow if Puppeteer
+            alert("Since we are using GramJS (Userbot), please check the server terminal for login prompts if not connected.");
+        }
+
+        // Poll status
+        setInterval(checkSystemStatus, 5000);
+        checkSystemStatus();
+
+        // Poll Messages & List
+        setInterval(() => {
+            if (currentDialogueId) {
+                // We need a silent update to not disrupt typing or scrolling if possible, 
+                // but for now simple refresh is valid to show new messages.
+                // To avoid flickering, we might need smarter logic, but let's stick to simple first.
+                // Actually, selectChat triggers full re-render. Ideally we just append. 
+                // But full re-fetch is safer for consistency.
+                const input = document.getElementById('message-input');
+                const isTyping = input && document.activeElement === input;
+
+                // Only refresh if not typing (or handle state better) - actually re-rendering messages area doesn't kill input focus usually if input is outside.
+                // Input is outside messages-area. So it's fine.
+                // But scroll position might jump. 
+                // Let's just do it.
+                selectChat(currentDialogueId);
+            }
+            loadDialogues();
+        }, 3000);
+
+        async function refreshLoginStatus() {
+            const res = await fetch('/login-qr');
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const img = document.getElementById('qr-code-img');
+                img.src = url;
+                img.style.display = 'block';
+                document.getElementById('login-status-text').textContent = 'Scan QR Code to Login';
+            } else {
+                document.getElementById('login-status-text').textContent = 'Could not fetch QR (Browser might be logged in or starting)';
+            }
+        }
+
+
+        // --- Scroll Logic ---
+        function scrollToBottom() {
+            const container = document.getElementById('messages-area');
+            container.scrollTop = container.scrollHeight;
+            hideScrollBtn();
+        }
+
+        function showScrollBtn() {
+            const btn = document.getElementById('scroll-btn');
+            if (btn) btn.style.display = 'flex';
+        }
+
+        function hideScrollBtn() {
+            const btn = document.getElementById('scroll-btn');
+            if (btn) btn.style.display = 'none';
+        }
+
+        function handleScroll() {
+            const container = document.getElementById('messages-area');
+            const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+            if (isAtBottom) {
+                hideScrollBtn();
+            } else {
+                showScrollBtn();
+            }
+        }
+
+        // --- Scanner Logic ---
+        async function scanChat() {
+            const input = document.getElementById('scan-input');
+            const link = input.value.trim();
+            if (!link) return alert('Enter a link');
+
+            // Find button by text content roughly or structure
+            const btn = input.nextElementSibling;
+            btn.textContent = 'Scanning...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/scan-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatLink: link, limit: 100 })
+                });
+                const leads = await res.json();
+
+                if (leads.error) throw new Error(leads.error);
+
+                const container = document.getElementById('scan-list');
+                container.innerHTML = '';
+                document.getElementById('scan-results').style.display = 'block';
+
+                if (leads.length === 0) {
+                    container.innerHTML = '<div style="color:var(--text-secondary);">No keywords found in last 100 messages.</div>';
+                }
+
+                leads.forEach(lead => {
+                    const div = document.createElement('div');
+                    div.style.padding = '0.75rem';
+                    div.style.border = '1px solid var(--border)';
+                    div.style.borderRadius = '0.5rem';
+                    div.style.background = 'var(--bg-main)';
+
+                    const name = lead.sender.firstName || 'Unknown';
+                    const username = lead.sender.username ? `@${lead.sender.username}` : 'No username';
+
+                    // Robust escaping for inline onclick
+                    const safeText = lead.text
+                        .replace(/\\/g, '\\\\')
+                        .replace(/'/g, "\\'")
+                        .replace(/"/g, '&quot;')
+                        .replace(/\n/g, ' ');
+
+                    const safeName = name
+                        .replace(/\\/g, '\\\\')
+                        .replace(/'/g, "\\'");
+
+                    const safeUsername = (lead.sender.username || lead.sender.id).toString();
+
+                    div.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:start;">
+                            <div>
+                                <div style="font-weight:600;">${name} <span style="font-size:0.8rem; color:var(--text-secondary);">${username}</span></div>
+                                <div style="margin-top:0.25rem; font-size:0.9rem;">"${lead.text.substring(0, 100)}..."</div>
+                            </div>
+                            <button class="btn btn-primary" style="font-size:0.7rem;" onclick="startScoutedDialogue('${safeUsername}', '${safeName}', '${safeText.substring(0, 50)}')">
+                                Chat
+                            </button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+
+            } catch (e) {
+                alert('Scan failed: ' + e.message);
+            } finally {
+                btn.textContent = 'Scan';
+                btn.disabled = false;
+            }
+        }
+
+        async function startScoutedDialogue(usernameId, name, contextText) {
+            try {
+                // Switch to inbox
+                switchView('inbox');
+
+                // Workaround: Alert operator to type to this user.
+                const note = prompt(`Start chat with @${usernameId}?`, `Привет! Вижу вы ищете: ${contextText}`);
+                if (note) {
+                    await fetch('/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: usernameId, message: note })
+                    });
+
+                    // Wait a bit and refresh
+                    setTimeout(() => {
+                        loadDialogues();
+                        // Ideally select it, but we need ID. LoadDialogues will show it at top.
+                    }, 2000);
+                }
+
+            } catch (e) {
+                alert('Failed to start chat');
+            }
+        }
+    </script>
+</body>
+
+</html>
+```

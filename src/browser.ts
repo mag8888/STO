@@ -14,58 +14,60 @@ const USER_DATA_DIR = path.join(process.cwd(), 'session_data');
 export async function initBrowser() {
     if (browser) return { browser, page };
 
+    console.log(`[Browser] User Data Dir: ${USER_DATA_DIR}`);
+
     // Fix for "Profile in use" error in Docker/Railway
     const lockFile = path.join(USER_DATA_DIR, 'SingletonLock');
     try {
-        // existsSync returns false for broken symlinks, so we use lstatSync
-        if (fs.existsSync(USER_DATA_DIR)) {
-            // Try to unlink SingletonLock directly
-            try {
-                if (fs.lstatSync(lockFile).isSymbolicLink() || fs.existsSync(lockFile)) {
-                    console.log('Removing stale SingletonLock...');
-                    fs.unlinkSync(lockFile);
-                }
-            } catch (e: any) {
-                if (e.code !== 'ENOENT') console.error('Failed to check/remove SingletonLock:', e);
-            }
+        // Check if file exists OR is a broken symlink
+        let exists = false;
+        try {
+            const stats = fs.lstatSync(lockFile);
+            exists = true; // It exists (file, dir, or symlink)
+        } catch (e: any) {
+            if (e.code !== 'ENOENT') console.error('[Browser] lstat failed:', e);
+        }
 
-            // Also remove other Singleton files
-            const otherLocks = ['SingletonCookie', 'SingletonSocket'];
-            for (const file of otherLocks) {
-                try {
-                    const p = path.join(USER_DATA_DIR, file);
-                    if (fs.existsSync(p) || fs.lstatSync(p).isSymbolicLink()) {
-                        fs.unlinkSync(p);
-                    }
-                } catch (e) { }
+        if (exists) {
+            try {
+                console.log('[Browser] Removing stale SingletonLock...');
+                fs.unlinkSync(lockFile);
+            } catch (e) {
+                console.error('[Browser] Failed to remove SingletonLock:', e);
             }
         }
     } catch (e) {
-        console.error('Error during lock cleanup:', e);
+        console.error('[Browser] Error during lock cleanup:', e);
     }
 
-    console.log('Launching browser (Headless: true/New)...');
-    browser = await puppeteer.launch({
-        headless: true, // Puppeteer v22: true = New Headless mode
-        userDataDir: USER_DATA_DIR,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-infobars',
-            '--window-position=0,0',
-            '--ignore-certificate-errors',
-            '--ignore-certificate-errors-spki-list',
-            '--disable-blink-features=AutomationControlled',
-            '--disable-features=IsolateOrigins,site-per-process',
-        ],
-        dumpio: true, // Log browser errors to stdout
-        timeout: 30000 // 30s launch timeout
-    });
+    console.log('[Browser] Launching puppeteer...');
+    try {
+        browser = await puppeteer.launch({
+            headless: true,
+            userDataDir: USER_DATA_DIR,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-blink-features=AutomationControlled',
+                // Add these to help with persistence stability
+                '--disable-infobars',
+                '--start-maximized',
+                '--profile-directory=Default'
+            ],
+            ignoreDefaultArgs: ['--enable-automation'],
+            dumpio: true,
+        });
+        console.log('[Browser] Puppeteer launched successfully.');
+    } catch (e) {
+        console.error('[Browser] Puppeteer launch failed:', e);
+        throw e;
+    }
+
+
+    if (!browser) throw new Error('Failed to initialize browser');
 
     const pages = await browser.pages();
     page = pages.length > 0 ? pages[0] : await browser.newPage();
@@ -101,9 +103,16 @@ export async function initBrowser() {
 
         // Try to wait for key elements (QR canvas or chat list)
         try {
-            await page.waitForSelector('.chat-list, .login_head_bg, canvas', { timeout: 15000 });
+            console.log('Waiting for .chat-list or canvas...');
+            await page.waitForSelector('.chat-list, .login_head_bg, canvas', { timeout: 30000 });
+            console.log('Selector found!');
+            // Add a small delay for rendering
+            await new Promise(r => setTimeout(r, 2000));
         } catch (e) {
             console.log('Element wait timed out, proceeding to screenshot anyway');
+            // Dump content to see what's there
+            const content = await page.content();
+            console.log('Page content length:', content.length);
         }
     } catch (err) {
         console.error('Navigation error:', err);

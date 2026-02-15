@@ -18,7 +18,6 @@ model User {
   bio       String?
   status    UserStatus @default(LEAD)
   tags      Json?    // Stored as JSON array of strings
-  facts     Json?    // Stored as JSON object: { occupation: "...", country: "...", ... }
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -31,7 +30,6 @@ model Dialogue {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   status    DialogueStatus @default(ACTIVE)
-  stage     DialogueStage  @default(DISCOVERY) // Track conversation stage
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -44,16 +42,7 @@ model Message {
   dialogue   Dialogue @relation(fields: [dialogueId], references: [id])
   sender     MessageSender
   text       String
-  status     MessageStatus @default(SENT)
   createdAt  DateTime @default(now())
-}
-
-model Template {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique // e.g., "discovery_intro", "offer_main"
-  content   String   // The prompt/message template
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 // model Embedding {
@@ -64,31 +53,6 @@ model Template {
 //   model     String   // e.g. "xenova/all-MiniLM-L6-v2"
 //   createdAt DateTime @default(now())
 // }
-
-model KnowledgeItem {
-  id        Int      @id @default(autoincrement())
-  question  String   // The primary question/intent
-  answer    String   // The approved answer
-  tags      Json?    // Array of tags/categories
-  hits      Int      @default(0) // Usage count
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model LearningCandidate {
-  id              Int      @id @default(autoincrement())
-  originalQuestion String
-  operatorAnswer  String
-  status          CandidateStatus @default(PENDING) // PENDING, APPROVED, REJECTED
-  createdAt       DateTime @default(now())
-}
-
-enum CandidateStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  MERGED
-}
 
 enum UserStatus {
   LEAD
@@ -102,21 +66,8 @@ enum DialogueStatus {
   ARCHIVED
 }
 
-enum DialogueStage {
-  DISCOVERY
-  OFFER
-  QUALIFICATION
-  CLOSED
-}
-
 enum MessageSender {
   USER
   SIMULATOR
   OPERATOR
-}
-
-enum MessageStatus {
-  SENT
-  DRAFT
-  RECEIVED
 }

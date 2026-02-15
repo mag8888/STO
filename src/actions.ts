@@ -1,9 +1,12 @@
-import { Page } from 'puppeteer';
-import prisma from './db';
+import { Api } from "telegram";
+import { getClient } from "./client";
+import { PrismaClient, MessageStatus, MessageSender } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 // --- DB Helpers ---
 
-async function ensureUserAndDialogue(username: string, name: string) {
+export async function ensureUserAndDialogue(username: string, name: string) {
     // 1. Find or Create User
     let user = await prisma.user.findFirst({
         where: { telegramId: username }
@@ -20,10 +23,11 @@ async function ensureUserAndDialogue(username: string, name: string) {
         });
         console.log(`[DB] Created new user: ${username}`);
     } else {
-        if (name && name !== user.firstName) {
-            await prisma.user.update({
+        // Update info if changed
+        if (user.firstName !== name || user.username !== username) {
+            user = await prisma.user.update({
                 where: { id: user.id },
-                data: { firstName: name }
+                data: { firstName: name, username: username }
             });
         }
     }
@@ -47,249 +51,141 @@ async function ensureUserAndDialogue(username: string, name: string) {
     return { user, dialogue };
 }
 
-async function saveMessageToDb(dialogueId: number, sender: 'SIMULATOR' | 'USER', text: string) {
+export async function saveMessageToDb(dialogueId: number, sender: MessageSender, text: string, status: MessageStatus = 'SENT') {
     try {
-        await prisma.message.create({
+        const msg = await prisma.message.create({
             data: {
                 dialogueId,
                 sender,
-                text
+                text,
+                status
             }
         });
         console.log(`[DB] Saved ${sender} message: "${text.substring(0, 20)}..."`);
+        return msg;
     } catch (e) {
         console.error(`[DB] Failed to save message: ${e}`);
+        return null;
     }
 }
 
-async function scrapeHistory(page: Page, dialogueId: number) {
-    console.log(`[Scraper] Starting history scrape for dialogue ${dialogueId}...`);
+// --- Actions ---
+
+export async function sendDraftMessage(page: any, messageId: number, customText?: string) {
+    console.log(`[Msg] Processing message ${messageId} via Userbot...`);
+    const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: { dialogue: { include: { user: true } } }
+    });
+
+    if (!message || !message.dialogue || !message.dialogue.user) {
+        throw new Error('Message or User not found');
+    }
+
+    const username = message.dialogue.user.username;
+    if (!username) throw new Error('User has no username');
+
+    // Check if client is connected
+    const client = getClient();
+    if (!client || !client.connected) {
+        throw new Error('Userbot client is not connected!');
+    }
+
+    const text = customText || message.text;
+
     try {
-        // Web K selectors
-        // Messages are usually in .bubble
-        const messages = await page.evaluate(() => {
-            const bubbles = Array.from(document.querySelectorAll('.bubble'));
-            return bubbles.map(b => {
-                const isOut = b.classList.contains('is-out');
-                const textEl = b.querySelector('.message'); // or .text-content
-                const text = textEl ? textEl.textContent?.trim() : '';
+        console.log(`[Msg] Sending to @${username}: "${text}"`);
+        await client.sendMessage(username, { message: text });
+        console.log(`[Msg] Sent approved message to @${username}`);
 
-                // Try to find time
-                const timeEl = b.querySelector('.time');
-                const time = timeEl ? timeEl.textContent?.trim() : '';
-
-                return {
-                    sender: isOut ? 'SIMULATOR' : 'USER',
-                    text: text || '',
-                    time
-                };
-            }).filter(m => m.text && m.text.length > 0);
+        // Update DB Status
+        return await prisma.message.update({
+            where: { id: messageId },
+            data: {
+                status: 'SENT',
+                createdAt: new Date(),
+                text: text
+            }
         });
 
-        console.log(`[Scraper] Found ${messages.length} messages.`);
+    } catch (e: any) {
+        console.error(`[Msg] Failed to send message: ${e.message}`);
+        throw e;
+    }
+}
 
-        // Save to DB (naive implementation: save if not exists exact match)
-        // In reality, we should fetch existing messages and compare, or use a better unique constraint.
-        // For now, let's just save valid messages and ignore duplicates based on simple logic if needed, 
-        // OR just simple insert for the MVP (assuming we scrape once or accept dupes).
-        // Let's try to avoid exact duplicates in the last 10 messages.
+export async function sendMessageToUser(page: any, username: string, text: string) {
+    console.log(`[Msg] Sending direct message to @${username}...`);
+    const client = getClient();
+    if (!client || !client.connected) throw new Error('Client not connected');
 
-        const existing = await prisma.message.findMany({
-            where: { dialogueId },
-            orderBy: { id: 'desc' },
-            take: 50
-        });
+    await client.sendMessage(username, { message: text });
 
-        let savedCount = 0;
+    const { dialogue } = await ensureUserAndDialogue(username, username);
+    await saveMessageToDb(dialogue.id, 'SIMULATOR', text, 'SENT');
+}
+
+export async function createDraftMessage(dialogueId: number, text: string) {
+    return await prisma.message.create({
+        data: {
+            dialogueId,
+            sender: 'SIMULATOR', // Keep legacy enum for now
+            text,
+            status: MessageStatus.DRAFT
+        }
+    });
+}
+
+// Stubs for compatibility
+export async function openChat(page: any, username: string) { return username; }
+export async function checkLogin(page: any) { return true; }
+export async function startDialogue(page: any, username: string) { }
+
+// --- Scouting ---
+export async function scanChatForLeads(chatUsername: string, limit: number = 50) {
+    console.log(`[Scout] Scanning ${chatUsername} for leads (limit: ${limit})...`);
+    const client = getClient();
+    if (!client || !client.connected) throw new Error('Client not connected');
+
+    try {
+        const messages = await client.getMessages(chatUsername, { limit: limit });
+        const leads: any[] = [];
+
+        // Simple Keywords for "Request"
+        const keywords = ['ищу', 'нужен', 'надо', 'подскажите', 'куплю', 'заказать', 'help', 'need', 'want', 'клиент', 'трафик'];
+
         for (const msg of messages) {
-            // Check if this message was already saved (simple check)
-            const isDuplicate = existing.some(e =>
-                e.text === msg.text &&
-                e.sender === msg.sender
-                // && time check if we parsed date correctly, but we only have "HH:MM" usually
-            );
+            if (!msg.message || !msg.sender) continue;
 
-            if (!isDuplicate) {
-                await prisma.message.create({
-                    data: {
-                        dialogueId,
-                        sender: msg.sender as 'SIMULATOR' | 'USER',
-                        text: msg.text
+            // Skip bots and self (approximate)
+            const senderInfo = msg.sender as any;
+            if (senderInfo.bot || msg.out) continue;
+
+            const text = msg.message.toLowerCase();
+            const isMatch = keywords.some(k => text.includes(k));
+
+            if (isMatch) {
+                const sender = await msg.getSender() as any; // Ensure we get full info if possible
+                if (!sender) continue;
+
+                leads.push({
+                    text: msg.message,
+                    date: msg.date,
+                    sender: {
+                        id: sender.id.toString(),
+                        username: sender.username,
+                        firstName: sender.firstName,
+                        lastName: sender.lastName
                     }
                 });
-                savedCount++;
             }
         }
-        console.log(`[Scraper] Saved ${savedCount} new messages.`);
 
-    } catch (e) {
-        console.error(`[Scraper] Failed: ${e}`);
+        console.log(`[Scout] Found ${leads.length} potential leads.`);
+        return leads;
+
+    } catch (e: any) {
+        console.error(`[Scout] Search failed: ${e.message}`);
+        throw e;
     }
-}
-
-
-// --- Main Actions ---
-
-// --- Shared Navigation Logic ---
-
-export async function openChat(page: Page, username: string): Promise<string> {
-    console.log(`[Nav] Opening chat with @${username}...`);
-
-    // 1. Try Direct Navigation
-    const targetUrl = username.includes('http') ? username : `https://web.telegram.org/k/#@${username}`;
-    if (page.url() !== targetUrl) {
-        await page.goto(targetUrl, { waitUntil: 'networkidle0' });
-    }
-
-    const chatSelector = '.chat-input-control';
-    const searchInputSelector = '.input-search > input';
-    let chatFound = false;
-
-    // Check if we are already in the chat (if accessed via URL directly)
-    try {
-        await page.waitForSelector(chatSelector, { timeout: 5000 });
-        chatFound = true;
-    } catch (e) {
-        console.log(`[Nav] Direct navigation didn't open chat immediately. Trying search...`);
-        try {
-            await page.waitForSelector(searchInputSelector, { timeout: 4000 });
-            await page.click(searchInputSelector);
-            // Clear search
-            await page.keyboard.down('Meta'); await page.keyboard.press('a'); await page.keyboard.up('Meta'); await page.keyboard.press('Backspace');
-
-            console.log(`[Nav] Searching for ${username}...`);
-            await page.type(searchInputSelector, username, { delay: 100 });
-            await new Promise(r => setTimeout(r, 3000));
-
-            // Search result click logic
-            let clicked = false;
-            try {
-                // Try to find exact match first
-                const handle = await page.evaluateHandle((u) => {
-                    const text = u.replace('@', '');
-                    const xpath = `//*[contains(@class, 'peer-title') and (text()='${text}' or text()='@${text}')]`;
-                    const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                    return result.singleNodeValue;
-                }, username);
-
-                let element = handle.asElement() as any;
-
-                // Fallback: search result item (try generic list items)
-                if (!element) {
-                    // Web K often uses .chat-item or simply div/a in .chat-list
-                    // We pick the first one which should be the best match
-                    element = await page.$('.chat-list a, .chat-list .chat-item, .sidebar-body .chat-item, .search-results .peer-item');
-                }
-
-                if (element) {
-                    await element.click();
-                    clicked = true;
-                }
-            } catch (xErr) { console.log("Click failed:", xErr); }
-
-            if (!clicked) {
-                // Fallback: Arrow down + Enter
-                await page.keyboard.press('ArrowDown');
-                await new Promise(r => setTimeout(r, 500));
-                await page.keyboard.press('Enter');
-            }
-
-            await page.waitForSelector(chatSelector, { timeout: 8000 });
-            chatFound = true;
-        } catch (searchErr) {
-            console.error(`[Nav] Search failed: ${searchErr}`);
-            throw new Error(`Chat with @${username} not found.`);
-        }
-    }
-
-    if (!chatFound) throw new Error(`Failed to open chat with @${username}`);
-
-    await new Promise(r => setTimeout(r, 1000));
-    return await getChatName(page);
-}
-
-
-// --- Main Actions ---
-
-export async function sendMessageToUser(page: Page, username: string, message: string) {
-    const name = await openChat(page, username);
-
-    // DB Init
-    const { dialogue } = await ensureUserAndDialogue(username, name);
-
-    // Scrape before sending (optional but good for context)
-    // await scrapeHistory(page, dialogue.id); 
-
-    // Send
-    const inputSelector = '.input-message-input';
-    await page.waitForSelector(inputSelector);
-    await page.click(inputSelector);
-
-    console.log(`[Msg] Typing message...`);
-    for (const char of message) { await page.type(inputSelector, char, { delay: Math.random() * 50 + 20 }); }
-    await new Promise(r => setTimeout(r, 500));
-    await page.keyboard.press('Enter');
-
-    console.log(`[Msg] Sent to @${username}`);
-
-    // Save sent message
-    await saveMessageToDb(dialogue.id, 'SIMULATOR', message);
-}
-
-export async function checkLogin(page: Page): Promise<boolean> {
-    try {
-        await page.waitForSelector('.chat-list, .sidebar-header', { timeout: 5000 });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-export async function getChatName(page: Page): Promise<string> {
-    try {
-        const selectors = ['.chat-header .peer-title', '.chat-info .person-name', '.top .peer-title', '.chat-title', '.user-title'];
-        for (const selector of selectors) {
-            const el = await page.$(selector);
-            if (el) {
-                const name = await page.evaluate(el => el.textContent, el);
-                if (name && name.trim().length > 0) return name.trim();
-            }
-        }
-        return "Unknown";
-    } catch (e) {
-        console.error("Failed to get chat name:", e);
-        return "Unknown";
-    }
-}
-
-export async function startDialogue(page: Page, username: string, referrer: string, topic: string) {
-    console.log(`Starting dialogue with @${username}...`);
-
-    // Use shared openChat
-    const name = await openChat(page, username);
-    console.log(`Detected name: ${name}`);
-
-    const displayName = (name && name !== "Unknown" && name !== "Saved Messages") ? name : username;
-
-    // 3. DB Sync & History Scrape
-    const { user, dialogue } = await ensureUserAndDialogue(username, displayName);
-    await scrapeHistory(page, dialogue.id);
-
-    // 4. Construct Message
-    const message = `${name} - Здравствуйте, мне ваш контакт передал ${referrer}, сказал вы занимаетесь ${topic}`;
-    console.log(`Generated message: "${message}"`);
-
-    // 5. Send Message
-    const inputSelector = '.input-message-input';
-    await page.click(inputSelector);
-    for (const char of message) { await page.type(inputSelector, char, { delay: Math.random() * 100 + 40 }); }
-    await new Promise(r => setTimeout(r, 800));
-    await page.keyboard.press('Enter');
-
-    console.log(`Dialogue started with @${username}`);
-
-    // LOG SENT MESSAGE
-    await saveMessageToDb(dialogue.id, 'SIMULATOR', message);
-
-    return { success: true, nameUsed: name, messageSent: message };
 }
