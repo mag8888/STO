@@ -110,6 +110,7 @@ enum CandidateStatus {
 }
 
 enum UserStatus {
+  NEW
   LEAD
   QUALIFIED
   REJECTED
