@@ -1112,16 +1112,31 @@
         }, 3000);
 
         async function refreshLoginStatus() {
-            const res = await fetch('/login-qr');
-            if (res.ok) {
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const img = document.getElementById('qr-code-img');
-                img.src = url;
-                img.style.display = 'block';
-                document.getElementById('login-status-text').textContent = 'Scan QR Code to Login';
-            } else {
-                document.getElementById('login-status-text').textContent = 'Could not fetch QR (Browser might be logged in or starting)';
+            const statusText = document.getElementById('login-status-text');
+            statusText.textContent = 'Refreshing QR...';
+
+            try {
+                const res = await fetch('/login-qr');
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const img = document.getElementById('qr-code-img');
+                    img.src = url;
+                    img.style.display = 'block';
+                    statusText.textContent = 'Scan QR Code to Login';
+                } else {
+                    const err = await res.json();
+                    statusText.textContent = `Status: ${err.error || res.statusText}`;
+                    if (res.status === 503) {
+                        alert("Client is initializing. Please wait 10 seconds and try again.");
+                    } else if (res.status === 400) {
+                        alert("You are already logged in!");
+                        checkSystemStatus();
+                    }
+                }
+            } catch (e) {
+                statusText.textContent = 'Error fetching QR';
+                console.error(e);
             }
         }
 
@@ -1417,8 +1432,9 @@
 
         // --- Auth Logic ---
         function startAuthFlow() {
-            // Trigger QR code refresh and show modal/section
-            // In this UI, we just refresh the status area
+            // Switch to settings view so user can see the QR code area
+            switchView('settings');
+            // Trigger QR code refresh
             refreshLoginStatus();
         }
 
