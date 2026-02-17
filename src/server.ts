@@ -221,15 +221,28 @@ fastify.get('/dialogues/:id', async (req, reply) => {
 fastify.get('/status', async (request, reply) => {
     try {
         const client = getClient();
-
         let connected = false;
         let me = null;
 
         if (client && client.connected) {
-            // Check if actually authorized
-            connected = await client.isUserAuthorized();
-            if (connected) {
-                try { me = await client.getMe(); } catch (e) { }
+            // Add timeout to prevent hanging
+            const authCheck = Promise.race([
+                client.isUserAuthorized(),
+                new Promise<boolean>((_, reject) => setTimeout(() => reject('Timeout'), 2000))
+            ]);
+
+            try {
+                connected = await authCheck;
+                if (connected) {
+                    const meCheck = Promise.race([
+                        client.getMe(),
+                        new Promise<any>((_, reject) => setTimeout(() => reject('Timeout'), 2000))
+                    ]);
+                    me = await meCheck;
+                }
+            } catch (e) {
+                console.error('[API] /status check timed out or failed:', e);
+                connected = false;
             }
         }
 

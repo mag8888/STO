@@ -147,13 +147,25 @@ export async function sendDraftMessage(page: any, messageId: number, customText?
 
 export async function sendMessageToUser(page: any, username: string, text: string) {
     console.log(`[Msg] Sending direct message to @${username}...`);
-    const client = getClient();
-    if (!client || !client.connected) throw new Error('Client not connected');
 
-    await client.sendMessage(username, { message: text });
-
+    // 1. Ensure User exists in DB first
     const { dialogue } = await ensureUserAndDialogue(username, username);
-    await saveMessageToDb(dialogue.id, 'SIMULATOR', text, 'SENT');
+
+    const client = getClient();
+    if (!client || !client.connected) {
+        console.error('[Msg] Client not connected. Cannot send.');
+        throw new Error('Client not connected');
+    }
+
+    try {
+        await client.sendMessage(username, { message: text });
+        console.log(`[Msg] Successfully sent to @${username}`);
+        await saveMessageToDb(dialogue.id, 'SIMULATOR', text, 'SENT');
+    } catch (e: any) {
+        console.error(`[Msg] Failed to send via Telegram: ${e.message}`);
+        // Optional: Save as FAILED? For now just throw so UI knows.
+        throw e;
+    }
 }
 
 export async function createDraftMessage(dialogueId: number, text: string) {
