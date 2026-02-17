@@ -30,6 +30,17 @@ model User {
   sourceChat   ScannedChat? @relation(fields: [sourceChatId], references: [id])
   revenue      Float    @default(0.0)
 
+  // Profile Fields (Networking Assistant)
+  city            String?
+  activity        String?  // Sphere of activity
+  bestClients     String?  // Description of best clients
+  requests        String?  // Common requests/tasks
+  hobbies         String?
+  currentIncome   String?  // Flexible string for range/value
+  desiredIncome   String?
+  networkingGoal  String?  // Context/Goal
+  profileStatus   ProfileStatus @default(EMPTY)
+
   rules        Rule[]
 }
 
@@ -161,6 +172,11 @@ model Rule {
 model IgnoreTrigger {
   id        Int      @id @default(autoincrement())
   keyword   String   @unique
-  type      String   @default("KEYWORD") // KEYWORD, USERNAME, PHONE
   createdAt DateTime @default(now())
+}
+
+enum ProfileStatus {
+  EMPTY
+  PARTIAL
+  COMPLETE
 }

@@ -103,7 +103,7 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
         const gptResult = await generateResponse(
             history,
             currentStage,
-            currentFacts,
+            user, // Changed from currentFacts
             templates,
             kbItems,
             undefined, // No custom instructions for auto-reply
@@ -114,6 +114,14 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
             console.log(`[GPT] Generated draft: ${gptResult.reply}`);
             await createDraftMessage(dialogue.id, gptResult.reply);
 
+            // Update Profile Data
+            if (gptResult.extractedProfile && Object.keys(gptResult.extractedProfile).length > 0) {
+                console.log(`[Profile] Updating user ${user.username}:`, gptResult.extractedProfile);
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: gptResult.extractedProfile
+                });
+            }
 
             // Update State
             if (gptResult.nextStage !== currentStage) {
@@ -122,7 +130,7 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
                     data: { stage: gptResult.nextStage }
                 });
             }
-            if (Object.keys(gptResult.newFacts).length > 0) {
+            if (gptResult.newFacts && Object.keys(gptResult.newFacts).length > 0) {
                 const updatedFacts = { ...currentFacts, ...gptResult.newFacts };
                 await prisma.user.update({
                     where: { id: user.id },

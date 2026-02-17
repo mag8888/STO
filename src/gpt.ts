@@ -1,100 +1,99 @@
 import OpenAI from 'openai';
-import { DialogueStage } from '@prisma/client';
+import { Dialogue, DialogueStage, User } from '@prisma/client';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-export interface UserFacts {
-    [key: string]: any;
-}
-
-// Simple interface for Knowledge Items for context
-interface KBItem {
-    question: string;
-    answer: string;
-}
-
-// Interface for what we expect from GPT
 export interface GPTResponse {
     reply: string;
     nextStage: DialogueStage;
     newFacts: any;
+    extractedProfile?: Partial<User>; // New: Extracted profile data
 }
 
+// Profile fields we want to collect in order
+const PROFILE_FIELDS = [
+    { key: 'activity', question: 'Чем занимаетесь? (какая сфера)' },
+    { key: 'city', question: 'Из какого вы города?' },
+    { key: 'bestClients', question: 'Расскажите о трех ваших лучших клиентах, чтобы мы смогли подобрать вам оптимальных людей.' },
+    { key: 'requests', question: 'С какими задачами к вам чаще всего приходят?' },
+    { key: 'hobbies', question: 'Если есть желание, расскажите о хобби (возможно подберем события по интересам).' },
+    { key: 'desiredIncome', question: 'К какому доходу хочешь прийти в ближайшие 3 месяца?' },
+    { key: 'currentIncome', question: 'Сколько сейчас зарабатываете в среднем? (если не готовы отвечать - напишите "не готов").' },
+];
 
 export async function generateResponse(
     history: { sender: string, text: string }[],
     stage: DialogueStage,
-    facts: UserFacts | any, // Support JSON type
+    user: User, // Changed: Pass full user object to check profile status
     templates: Record<string, string>,
-    kbItems: KBItem[] = [], // New: Pass relevant KB items
-    instructions?: string,   // New: Custom User Instructions
-    rules: string[] = []     // New: Persistent Rules
-): Promise<{ reply: string, nextStage: DialogueStage, newFacts: any } | null> {
+    kbItems: { question: string, answer: string }[] = [],
+    instructions?: string,
+    rules: string[] = []
+): Promise<GPTResponse | null> {
 
-    // Construct System Prompt
-    let systemPrompt = `You are a helpful assistant engaging in a dialogue with a user.
-Your goal is to move the conversation forward based on the current stage: ${stage}.
-GOAL: Qualify the user. Continue the dialogue until the user explicitly says they are INTERESTED or NOT INTERESTED.
-- If INTERESTED: Offer to connect them with an operator.
-- If NOT INTERESTED: politely close the conversation.
+    // 1. Determine what we already know and what's missing
+    const missingField = PROFILE_FIELDS.find(f => !user[f.key as keyof User] || user[f.key as keyof User] === '');
 
-Current Facts about User: ${JSON.stringify(facts)}
+    let systemPrompt = `You are a professional Networking Assistant. Your goal is to get to know the user to connect them with useful people.
+You speak in a lively, friendly manner, like a real human. No formal "bot" language. Short messages (1-2 sentences).
 
-Available Templates (use if appropriate):
-${JSON.stringify(templates, null, 2)}
+CURRENT STAGE: ${stage}
+USER PROFILE:
+- Name: ${user.firstName || 'Unknown'}
+- City: ${user.city || 'Unknown'}
+- Activity: ${user.activity || 'Unknown'}
+- Best Clients: ${user.bestClients || 'Unknown'}
+- Requests: ${user.requests || 'Unknown'}
+- Hobbies: ${user.hobbies || 'Unknown'}
+- Current Income: ${user.currentIncome || 'Unknown'}
+- Desired Income: ${user.desiredIncome || 'Unknown'}
+
+GOAL: Complete the user profile naturally.
 `;
 
-    if (kbItems.length > 0) {
-        systemPrompt += `\nRELEVANT KNOWLEDGE BASE (Use these to answer if applicable):\n`;
-        kbItems.forEach((item, i) => {
-            systemPrompt += `${i + 1}. Q: ${item.question}\n   A: ${item.answer}\n`;
-        });
-        systemPrompt += `\nIf the user's question matches a KB item, paraphrase the answer naturally.\n`;
-    }
-
-    if (instructions) {
+    if (missingField) {
         systemPrompt += `
-\n*** IMPORTANT USER INSTRUCTIONS ***
-${instructions}
-*** END INSTRUCTIONS ***\n`;
-    }
-
-    if (rules && rules.length > 0) {
+Current Goal: Find out "${missingField.key}".
+Strategy:
+1. "Mirror" the user's previous answer (briefly confirm/praise what they just said).
+2. Then ask: "${missingField.question}" (You can rephrase it slightly to fit context, but keep the meaning).
+3. If the user refuses to answer (e.g. "skip"), accept it and move to the next topic.
+`;
+    } else {
         systemPrompt += `
-\n*** PERMANENT RULES (ALWAYS FOLLOW) ***
-${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
-*** END RULES ***\n`;
+Current Goal: Profile is complete! Thank the user and tell them you will look for matches.
+`;
     }
 
     systemPrompt += `
-STAGES & GOALS:
-1. DISCOVERY: Find out what the user does (Occupation) and if they need leads/clients.
-2. OFFER: Explain that we provide leads/clients for their business.
-3. QUALIFICATION: Ask if they are interested in testing the service.
-4. CLOSED: The conversation is over.
-
 INSTRUCTIONS:
-- Keep replies short and conversational.
-- Don't be pushy.
-- If you don't know the answer, ask a clarifying question or suggest waiting for an operator.
+- NO buttons. NO menus. Text only.
+- Mirroring Example: "Got it, you help entrepreneurs scale. Cool. And what city are you in?"
+- If the user asks a question, answer it using the KB below or common sense.
+- ALWAYS extract any new profile data from the user's last message into the JSON output.
 
-INSTRUCTIONS:
-- Analyze the user's last message.
-- If they answered a question, extract facts (e.g. "I am a designer" -> occupation: "Designer").
-- Decide the next stage (e.g. if occupation found -> OFFER).
-- Generate a reply. If you use a template, strictly follow it but make it sound natural.
-- If the user asks a question found in the KB, answer it.
-- If you don't know, ask clarifying questions.
-- **IMPORTANT**: ALWAYS reply in the same language as the user's last message. If they speak Russian, reply in Russian. If English, reply in English.
+RELEVANT KNOWLEDGE BASE:
+${kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n')}
 
-Return a JSON object with this format (no markdown):
+PERMANENT RULES:
+${rules.join('\n')}
+
+${instructions ? `\nCUSTOM INSTRUCTIONS:\n${instructions}` : ''}
+
+OUTPUT FORMAT (JSON):
 {
-  "reply": "Your response text",
-  "nextStage": "The new stage",
-  "newFacts": { "key": "value" }
-}`;
+  "reply": "Your extracted reply",
+  "extractedProfile": {
+      "city": "Paris",
+      "activity": "Marketing",
+      ... (only fields found in the LAST message)
+  },
+  "nextStage": "${stage}",
+  "newFacts": { ... }
+}
+`;
 
     try {
         const messages: any[] = [
@@ -105,25 +104,21 @@ Return a JSON object with this format (no markdown):
             }))
         ];
 
-        console.log(`[GPT] Sending request to OpenAI with ${messages.length} messages...`);
+        console.log(`[GPT] Sending request...`);
         const completion = await openai.chat.completions.create({
             messages: messages,
-            model: 'gpt-4o', // or gpt-3.5-turbo if 4o fails
+            model: 'gpt-4o',
             temperature: 0.7,
             response_format: { type: 'json_object' }
         });
 
         const content = completion.choices[0].message.content;
-        console.log(`[GPT] Received response: ${content?.substring(0, 50)}...`);
-
         if (!content) return null;
 
-        // Clean up markdown code blocks if present
         const jsonStr = content.replace(/```json\n?|```/g, '').trim();
-
         return JSON.parse(jsonStr);
     } catch (e: any) {
-        console.error('[GPT] Error generating response:', e.message || e);
-        return null; // Return null to avoid crashing listener
+        console.error('[GPT] Error:', e);
+        return null;
     }
 }
