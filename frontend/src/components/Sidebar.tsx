@@ -224,7 +224,7 @@ const StatusIndicator = () => {
                         <h3 className="font-bold mb-4">Scan to Login</h3>
                         <img src={qrBlob} alt="QR Code" className="w-64 h-64 border border-border" />
                         <p className="text-xs text-center mt-4 text-muted-foreground">
-                            Open Telegram > Settings > Devices > Link Desktop Device
+                            Open Telegram &gt; Settings &gt; Devices &gt; Link Desktop Device
                         </p>
                     </div>
                 </div>
