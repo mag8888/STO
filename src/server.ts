@@ -669,7 +669,7 @@ fastify.post('/sync-chats', async (req, reply) => {
         return reply.code(500).send({ error: 'Sync failed', details: e.message });
     }
 });
-});
+
 
 fastify.post('/users/:id/status', async (req, reply) => {
     const { id } = req.params as { id: string };
