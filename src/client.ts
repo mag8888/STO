@@ -14,6 +14,11 @@ if (!fs.existsSync(SESSION_DIR)) {
 }
 
 let client: TelegramClient;
+let currentQR: Buffer | null = null;
+
+export function getQR() {
+    return currentQR;
+}
 
 export async function initClient() {
     console.log("Initializing GramJS Client...");
@@ -40,28 +45,34 @@ export async function initClient() {
         // Use QR Code Login
         const qrcode = require('qrcode-terminal');
         await client.connect();
-        await client.signInUserWithQrCode(
+
+        // Start login flow in background (don't await) so server can start
+        client.signInUserWithQrCode(
             { apiId: API_ID, apiHash: API_HASH },
             {
                 onError: (e) => console.log(e),
                 qrCode: async (code) => {
                     console.log("Scan this QR code:");
+                    currentQR = code.token;
                     qrcode.generate(code.token.toString('base64'), { small: true });
                 }
             }
-        );
+        ).then(async () => {
+            console.log("You should now be connected.");
+            currentQR = null; // Clear QR
 
-        console.log("You should now be connected.");
-
-        // Save session if new
-        const newSession = client.session.save() as unknown as string;
-        if (newSession !== sessionString) {
-            fs.writeFileSync(SESSION_FILE, newSession);
-            console.log("Session saved to", SESSION_FILE);
-            console.log("\n⚠️  COPY THIS SESSION STRING FOR RAILWAY ENV (TELEGRAM_SESSION):");
-            console.log(newSession);
-            console.log("----------------------------------------------------------------\n");
-        }
+            // Save session if new
+            const newSession = client.session.save() as unknown as string;
+            if (newSession !== sessionString) {
+                fs.writeFileSync(SESSION_FILE, newSession);
+                console.log("Session saved to", SESSION_FILE);
+                console.log("\n⚠️  COPY THIS SESSION STRING FOR RAILWAY ENV (TELEGRAM_SESSION):");
+                console.log(newSession);
+                console.log("----------------------------------------------------------------\n");
+            }
+        }).catch(e => {
+            console.error("Login failed:", e);
+        });
 
     } catch (e) {
         console.error("Failed to start client:", e);

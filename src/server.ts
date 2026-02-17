@@ -278,6 +278,26 @@ fastify.post('/reconnect', async (req, reply) => {
     }
 });
 
+fastify.get('/login-qr', async (req, reply) => {
+    try {
+        const { getQR } = await import('./client');
+        const token = getQR();
+        if (!token) {
+            return reply.code(404).send({ error: 'No QR code available. Client might be connected or initializing.' });
+        }
+
+        const QRCode = require('qrcode');
+        // Generate QR code image buffer from the base64 token string (same as qrcode-terminal)
+        const buffer = await QRCode.toBuffer(token.toString('base64'));
+
+        reply.type('image/png');
+        return buffer;
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to generate QR', details: e.message });
+    }
+});
+
 fastify.post('/scan-chat', async (req, reply) => {
     const { chatLink, limit } = req.body as { chatLink: string, limit?: number };
     if (!chatLink) return reply.code(400).send({ error: 'Missing chatLink' });
