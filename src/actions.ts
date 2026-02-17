@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 
 // --- DB Helpers ---
 
-export async function ensureUserAndDialogue(username: string, name: string, accessHash?: string) {
+export async function ensureUserAndDialogue(username: string, name: string, accessHash?: string, source: 'INBOUND' | 'SCOUT' = 'INBOUND') {
     // 1. Find or Create User
     let user = await prisma.user.findFirst({
         where: { telegramId: username }
@@ -50,10 +50,11 @@ export async function ensureUserAndDialogue(username: string, name: string, acce
         dialogue = await prisma.dialogue.create({
             data: {
                 userId: user.id,
-                status: 'ACTIVE'
+                status: 'ACTIVE',
+                source: source // Use provided source
             }
         });
-        console.log(`[DB] Created new dialogue for user: ${username}`);
+        console.log(`[DB] Created new dialogue for user: ${username} (Source: ${source})`);
     }
 
     return { user, dialogue };
