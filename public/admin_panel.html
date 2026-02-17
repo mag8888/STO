@@ -440,7 +440,10 @@
                 inbox.style.display = 'flex';
                 inbox.classList.add('active');
                 // Force filter
+                currentFilter = 'INBOUND'; // Explicitly set variable
                 setFilter('INBOUND');
+                console.log('Switched to Direct. Filter set to:', currentFilter);
+                // alert('Direct View Loaded. Filter: ' + currentFilter); 
                 loadDialogues();
 
                 // Update Nav link
