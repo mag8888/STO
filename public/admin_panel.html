@@ -1431,12 +1431,29 @@
         };
 
         // --- Auth Logic ---
+        let qrInterval = null;
+
         function startAuthFlow() {
             // Switch to settings view so user can see the QR code area
             switchView('settings');
-            // Trigger QR code refresh
+            // Trigger QR code refresh immediately
             refreshLoginStatus();
+
+            // Start polling to keep QR fresh (GramJS rotates tokens)
+            if (qrInterval) clearInterval(qrInterval);
+            qrInterval = setInterval(refreshLoginStatus, 3000);
         }
+
+        // Stop polling when connected
+        const _origCheckStatus = checkSystemStatus;
+        checkSystemStatus = async function () {
+            await _origCheckStatus(); // Call original
+            const text = document.getElementById('system-status-text').textContent;
+            if (text === 'Online' && qrInterval) {
+                clearInterval(qrInterval);
+                qrInterval = null;
+            }
+        };
 
     </script>
 

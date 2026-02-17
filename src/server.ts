@@ -312,7 +312,12 @@ fastify.get('/login-qr', async (req, reply) => {
         const QRCode = require('qrcode');
         // Generate QR code image buffer from the base64 token string (same as qrcode-terminal)
         // qrcode package takes a string/buffer
-        const buffer = await QRCode.toBuffer(token.toString('base64'));
+        // Add options for better scannability
+        const buffer = await QRCode.toBuffer(token.toString('base64'), {
+            scale: 10,
+            margin: 2,
+            errorCorrectionLevel: 'L' // Lower error correction = less dense QR = easier to scan
+        });
 
         reply.type('image/png');
         return buffer;
