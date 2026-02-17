@@ -33,7 +33,7 @@
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link" onclick="switchView('direct')">
+                <a class="nav-link" onclick="switchToDirect()">
                     <ion-icon name="chatbox-ellipses-outline"></ion-icon> Direct
                 </a>
             </li>
@@ -108,7 +108,7 @@
                     <button class="btn btn-secondary" onclick="syncChats()" title="Sync Telegram Chats">
                         <ion-icon name="sync-outline"></ion-icon> Sync
                     </button>
-                    <button class="btn btn-secondary" onclick="switchView('direct')" title="Force Direct View">
+                    <button class="btn btn-secondary" onclick="switchToDirect()" title="Force Direct View">
                         See Direct
                     </button>
                     <button class="btn btn-primary" onclick="refreshStats()">Refresh</button>
@@ -545,6 +545,40 @@
             }
 
             renderChatList(dialogues);
+        }
+
+        // --- Special Direct View Handler ---
+        function switchToDirect() {
+            console.log('--- FORCING DIRECT VIEW ---');
+
+            // 1. Hide all views
+            document.querySelectorAll('.view-container, #inbox-view').forEach(el => {
+                el.classList.remove('active');
+                if (el.id === 'inbox-view') el.style.display = 'none';
+            });
+
+            // 2. Show Inbox View (reused)
+            const inbox = document.getElementById('inbox-view');
+            inbox.style.display = 'flex';
+            inbox.classList.add('active');
+
+            // 3. Set Filter & Logic
+            currentFilter = 'INBOUND';
+            // setFilter('INBOUND'); // setFilter calls render, but maybe not load?
+            // Let's manually set active tab to avoid recursion if setFilter calls switchView? Unlikely.
+            document.querySelectorAll('.filter-tab').forEach(el => el.classList.remove('active'));
+            const tab = document.getElementById('tab-inbound');
+            if (tab) tab.classList.add('active');
+
+            console.log('Direct Filter Set:', currentFilter);
+
+            // 5. Load Data
+            loadDialogues();
+
+            // 6. Update Sidebar
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            const directLink = Array.from(document.querySelectorAll('.nav-link')).find(el => el.innerText.includes('Direct'));
+            if (directLink) directLink.classList.add('active');
         }
 
         async function loadDialogues() {
