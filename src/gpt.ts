@@ -28,7 +28,9 @@ export async function generateResponse(
     stage: DialogueStage,
     facts: UserFacts | any, // Support JSON type
     templates: Record<string, string>,
-    kbItems: KBItem[] = [] // New: Pass relevant KB items
+    kbItems: KBItem[] = [], // New: Pass relevant KB items
+    instructions?: string,   // New: Custom User Instructions
+    rules: string[] = []     // New: Persistent Rules
 ): Promise<{ reply: string, nextStage: DialogueStage, newFacts: any } | null> {
 
     // Construct System Prompt
@@ -52,6 +54,20 @@ ${JSON.stringify(templates, null, 2)}
         systemPrompt += `\nIf the user's question matches a KB item, paraphrase the answer naturally.\n`;
     }
 
+    if (instructions) {
+        systemPrompt += `
+\n*** IMPORTANT USER INSTRUCTIONS ***
+${instructions}
+*** END INSTRUCTIONS ***\n`;
+    }
+
+    if (rules && rules.length > 0) {
+        systemPrompt += `
+\n*** PERMANENT RULES (ALWAYS FOLLOW) ***
+${rules.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+*** END RULES ***\n`;
+    }
+
     systemPrompt += `
 STAGES & GOALS:
 1. DISCOVERY: Find out what the user does (Occupation) and if they need leads/clients.
@@ -71,6 +87,7 @@ INSTRUCTIONS:
 - Generate a reply. If you use a template, strictly follow it but make it sound natural.
 - If the user asks a question found in the KB, answer it.
 - If you don't know, ask clarifying questions.
+- **IMPORTANT**: ALWAYS reply in the same language as the user's last message. If they speak Russian, reply in Russian. If English, reply in English.
 
 Return a JSON object with this format (no markdown):
 {
@@ -93,6 +110,7 @@ Return a JSON object with this format (no markdown):
             messages: messages,
             model: 'gpt-4o', // or gpt-3.5-turbo if 4o fails
             temperature: 0.7,
+            response_format: { type: 'json_object' }
         });
 
         const content = completion.choices[0].message.content;

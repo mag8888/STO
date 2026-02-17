@@ -15,6 +15,7 @@ model User {
   username  String?
   firstName String?
   lastName  String?
+  accessHash String? // For users without username (by ID)
   bio       String?
   status    UserStatus @default(LEAD)
   tags      Json?    // Stored as JSON array of strings
@@ -23,7 +24,23 @@ model User {
   updatedAt DateTime @updatedAt
 
   dialogues Dialogue[]
-//   embeddings Embedding[]
+  
+  // Source Tracking
+  sourceChatId Int?
+  sourceChat   ScannedChat? @relation(fields: [sourceChatId], references: [id])
+  revenue      Float    @default(0.0)
+
+  rules        Rule[]
+}
+
+model ScannedChat {
+  id          Int      @id @default(autoincrement())
+  username    String?
+  title       String? // Chat title
+  link        String? // Original link used
+  scannedAt   DateTime @default(now())
+  
+  users       User[]
 }
 
 model Dialogue {
@@ -32,6 +49,7 @@ model Dialogue {
   user      User     @relation(fields: [userId], references: [id])
   status    DialogueStatus @default(ACTIVE)
   stage     DialogueStage  @default(DISCOVERY) // Track conversation stage
+  source    DialogueSource @default(INBOUND)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -45,6 +63,7 @@ model Message {
   sender     MessageSender
   text       String
   status     MessageStatus @default(SENT)
+  feedback   String?       // Operator feedback/correction for this message
   createdAt  DateTime @default(now())
 }
 
@@ -95,6 +114,7 @@ enum UserStatus {
   QUALIFIED
   REJECTED
   MATCHED
+  BLOCKED
 }
 
 enum DialogueStatus {
@@ -109,6 +129,11 @@ enum DialogueStage {
   CLOSED
 }
 
+enum DialogueSource {
+  INBOUND
+  SCOUT
+}
+
 enum MessageSender {
   USER
   SIMULATOR
@@ -119,4 +144,14 @@ enum MessageStatus {
   SENT
   DRAFT
   RECEIVED
+}
+
+model Rule {
+  id        Int      @id @default(autoincrement())
+  content   String
+  isActive  Boolean  @default(true)
+  isGlobal  Boolean  @default(false)
+  userId    Int?     // Optional relation to User
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
 }

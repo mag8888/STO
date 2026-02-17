@@ -5,7 +5,13 @@ import fs from "fs";
 
 const API_ID = parseInt(process.env.TELEGRAM_API_ID || "0");
 const API_HASH = process.env.TELEGRAM_API_HASH || "";
-const SESSION_FILE = "session.txt";
+const SESSION_DIR = "session_data";
+const SESSION_FILE = `${SESSION_DIR}/session.txt`;
+
+// Ensure directory exists
+if (!fs.existsSync(SESSION_DIR)) {
+    fs.mkdirSync(SESSION_DIR);
+}
 
 let client: TelegramClient;
 
@@ -31,12 +37,19 @@ export async function initClient() {
     });
 
     try {
-        await client.start({
-            phoneNumber: async () => await input.text("Please enter your number: "),
-            password: async () => await input.text("Please enter your password: "),
-            phoneCode: async () => await input.text("Please enter the code you received: "),
-            onError: (err) => console.log(err),
-        });
+        // Use QR Code Login
+        const qrcode = require('qrcode-terminal');
+        await client.connect();
+        await client.signInUserWithQrCode(
+            { apiId: API_ID, apiHash: API_HASH },
+            {
+                onError: (e) => console.log(e),
+                qrCode: async (code) => {
+                    console.log("Scan this QR code:");
+                    qrcode.generate(code.token.toString('base64'), { small: true });
+                }
+            }
+        );
 
         console.log("You should now be connected.");
 
@@ -45,6 +58,9 @@ export async function initClient() {
         if (newSession !== sessionString) {
             fs.writeFileSync(SESSION_FILE, newSession);
             console.log("Session saved to", SESSION_FILE);
+            console.log("\n⚠️  COPY THIS SESSION STRING FOR RAILWAY ENV (TELEGRAM_SESSION):");
+            console.log(newSession);
+            console.log("----------------------------------------------------------------\n");
         }
 
     } catch (e) {
@@ -52,6 +68,16 @@ export async function initClient() {
     }
 
     return client;
+}
+
+
+export async function reconnectClient() {
+    console.log("Reconnecting client...");
+    if (client) {
+        try { await client.disconnect(); } catch (e) { console.error("Disconnect failed", e); }
+    }
+    await initClient();
+    return true;
 }
 
 export function getClient() {

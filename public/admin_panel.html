@@ -43,6 +43,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link" onclick="switchView('scout')">
+                    <ion-icon name="telescope-outline"></ion-icon> Scout 🔭
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" onclick="switchView('kb')">
                     <ion-icon name="library-outline"></ion-icon> Knowledge Base
                 </a>
@@ -57,6 +62,11 @@
                     <ion-icon name="settings-outline"></ion-icon> Settings
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link" onclick="switchView('rules')">
+                    <ion-icon name="bulb-outline"></ion-icon> Rules 🧠
+                </a>
+            </li>
         </ul>
 
         <div class="status-indicator">
@@ -64,6 +74,10 @@
             <div id="auth-section" style="margin-top: 10px; display: none;">
                 <button class="btn btn-primary" style="width: 100%; font-size: 0.8rem;" onclick="startAuthFlow()">Login
                     / Scan QR</button>
+            </div>
+            <div id="reconnect-section" style="margin-top: 10px; display: none;">
+                <button class="btn btn-primary" style="width: 100%; font-size: 0.8rem;" onclick="reconnect()">Reconnect
+                    🔄</button>
             </div>
             <div id="user-info"
                 style="margin-top: 10px; font-size: 0.8rem; color: var(--text-secondary); display: none;">
@@ -207,6 +221,36 @@
             </div>
         </div>
 
+        <!-- Scout View -->
+        <div id="scout-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">Scout External Chats 🔭</h1>
+            </div>
+
+            <div class="stat-card">
+                <h3>Target Chat</h3>
+                <p style="color:var(--text-secondary); font-size:0.9rem; margin-bottom:1rem;">
+                    Enter a public chat link (e.g. t.me/freelance_chat) to scan for leads matching keywords: "ищу",
+                    "need", "клиент", etc.
+                </p>
+                <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                    <input type="text" id="scout-link" class="message-input" style="flex:1; min-width:200px;"
+                        placeholder="https://t.me/example_chat">
+                    <input type="number" id="scout-limit" class="message-input" style="width:100px;" value="50" min="10"
+                        max="200">
+                    <button class="btn btn-primary" onclick="scanChat()">Scan Now</button>
+                </div>
+            </div>
+
+            <div id="scout-results-area" style="margin-top:1rem; display:none;">
+                <h3 style="margin-bottom:1rem;">Found Leads <span id="scout-count" class="badge">0</span></h3>
+                <div id="scout-list"
+                    style="display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+                    <!-- Cards injected here -->
+                </div>
+            </div>
+        </div>
+
         <!-- Templates View (Placeholder) -->
         <div id="templates-view" class="view-container">
             <div class="view-header">
@@ -216,6 +260,26 @@
             <div id="templates-list"
                 style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
                 <!-- Templates injected here -->
+            </div>
+        </div>
+
+        <!-- Rules View -->
+        <div id="rules-view" class="view-container">
+            <div class="view-header">
+                <h1 class="view-title">Smart Rules 🧠</h1>
+                <button class="btn btn-primary" onclick="openAddRuleModal()">+ Add Rule</button>
+            </div>
+
+            <div class="stat-card" style="margin-bottom:1rem;">
+                <p style="color:var(--text-secondary);">
+                    Rules allow you to persistent instructions for the AI. <br>
+                    <strong>Global Rules</strong> apply to ALL chats.<br>
+                    <strong>Personal Rules</strong> apply only to specific users (save them from the chat prompt).
+                </p>
+            </div>
+
+            <div id="rules-list" style="display: flex; flex-direction:column; gap:1rem;">
+                <!-- Rules injected here -->
             </div>
         </div>
 
@@ -268,6 +332,24 @@
         </div>
 
     </main>
+
+    <!-- Coach Modal -->
+    <div id="coach-modal"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:1000;">
+        <div style="background:var(--bg-card); padding:2rem; border-radius:1rem; width:500px; max-width:90%;">
+            <h3 style="margin-top:0;">👨‍🏫 Coach the Assistant</h3>
+            <p style="color:var(--text-secondary); margin-bottom:1rem;">
+                Explain what was wrong with this draft or provide a rule for the future.
+            </p>
+            <textarea id="coach-input"
+                style="width:100%; height:100px; padding:0.5rem; border-radius:0.5rem; background:var(--bg-main); border:1px solid var(--border); color:var(--text-main); margin-bottom:1rem;"
+                placeholder="e.g. Don't be so pushy, ask about their business first..."></textarea>
+            <div style="display:flex; justify-content:flex-end; gap:1rem;">
+                <button class="btn" onclick="closeCoachModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveFeedback()">Save Feedback</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         // --- State ---
@@ -350,27 +432,42 @@
         function renderChatList(list) {
             const container = document.getElementById('chat-list');
             container.innerHTML = '';
-
             list.forEach(d => {
                 const div = document.createElement('div');
-                div.className = `chat-item ${currentDialogueId === d.id ? 'active' : ''}`;
+                div.className = `chat-item ${d.id === currentDialogueId ? 'active' : ''}`;
                 div.onclick = () => selectChat(d.id);
 
                 const lastMsg = d.messages[0];
-                const previewText = lastMsg ? lastMsg.text : 'No messages';
-                const isDraft = lastMsg && lastMsg.status === 'DRAFT';
+                const text = lastMsg ? lastMsg.text.substring(0, 30) + '...' : 'No messages';
 
-                // Format Name + Username
-                const name = d.user.firstName || 'Unknown';
-                const username = d.user.username ? `@${d.user.username}` : '';
-                const displayName = username ? `${name} <span style="font-size:0.8em; color:var(--text-secondary);">${username}</span>` : name;
+                // Status Indicators
+                let statusBadge = '';
+                if (lastMsg && lastMsg.status === 'DRAFT') {
+                    statusBadge = '<span class="badge badge-draft">DRAFT</span>';
+                } else if (lastMsg && lastMsg.sender === 'USER') {
+                    statusBadge = '<span class="badge badge-pending">PENDING</span>';
+                }
+
+                // Source Badge
+                let sourceBadge = '';
+                if (d.source === 'SCOUT') {
+                    sourceBadge = '<span class="badge" style="background:#8e44ad;">SCOUT</span>';
+                } else {
+                    sourceBadge = '<span class="badge" style="background:#2ecc71;">INBOUND</span>';
+                }
 
                 div.innerHTML = `
-                    <div class="chat-name">
-                        ${displayName}
-                        ${isDraft ? '<span class="badge blue" style="float:right; font-size: 0.6rem;">DRAFT</span>' : ''}
+                <div style="display:flex; justify-content:space-between;">
+                    <div style="font-weight:600;">
+                        ${d.user.firstName || 'User'} 
+                        <span style="font-size:0.8rem; color: #888;">@${d.user.username || d.user.telegramId}</span>
                     </div>
-                    <div class="chat-preview">${previewText}</div>
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.2rem;">
+                    ${sourceBadge}
+                    ${statusBadge}
+                </div>
+                <div style="font-size:0.85rem; color: #aaa; margin-top:0.25rem;">${text}</div>
                 `;
                 container.appendChild(div);
             });
@@ -381,37 +478,83 @@
 
             // Highlight in list
             document.querySelectorAll('.chat-item').forEach(el => el.classList.remove('active'));
+            // Try to find element by onclick attribute or similar if needed, but for now just removing active class is enough.
+            // Ideally we should add ID to chat-item div.
 
             // Fetch full details
+            console.log('Fetching dialogue details for ID:', id);
             try {
                 const res = await fetch(`/dialogues/${id}`);
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        // Chat likely archived or deleted
+                        console.warn('Chat not found (might be archived)');
+                        loadDialogues(); // Refresh list to remove stale entry
+                        return;
+                    }
+                    throw new Error('Failed to load chat');
+                }
+
                 const dialogue = await res.json();
 
-                if (!dialogue) return;
+                if (!dialogue || !dialogue.user) {
+                    console.error('Dialogue data incomplete', dialogue);
+                    return;
+                }
 
-                renderChatHeader(dialogue.user);
+                renderChatHeader(dialogue);
                 renderMessages(dialogue.messages);
             } catch (e) {
                 console.error("Failed to load chat details", e);
             }
         }
 
-        function renderChatHeader(user) {
-            const container = document.getElementById('active-chat-name');
+        function renderChatHeader(dialogue) {
+            const header = document.getElementById('active-chat-name'); // Use active-chat-name as per original structure
+            const user = dialogue.user;
             const name = user.firstName || 'Unknown';
             const lastName = user.lastName || '';
             const fullName = [name, lastName].filter(Boolean).join(' ');
             const username = user.username ? `@${user.username}` : '';
 
-            container.innerHTML = `
-                <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <span id="chat-title-text" style="font-weight:600;">${fullName}</span>
-                    <span style="font-size:0.8em; color:var(--text-secondary);">${username}</span>
-                    <button class="btn btn-secondary" style="padding:0.1rem 0.3rem; font-size:0.7rem;" onclick="startEditName(${user.id}, '${name.replace(/'/g, "\\'")}', '${lastName.replace(/'/g, "\\'")}')">
-                        <ion-icon name="pencil-outline"></ion-icon>
-                    </button>
+            header.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; align-items:center; gap:0.5rem;">
+                        <span id="chat-title-text" style="font-weight:600;">${fullName}</span>
+                        <span style="font-size:0.8em; color:var(--text-secondary);">${username}</span>
+                        <button class="btn btn-secondary" style="padding:0.1rem 0.3rem; font-size:0.7rem;" onclick="startEditName(${user.id}, '${name.replace(/'/g, "\\'")}', '${lastName.replace(/'/g, "\\'")}')">
+                            <ion-icon name="pencil-outline"></ion-icon>
+                        </button>
+                    </div>
+                    <button class="btn" style="background:var(--bg-main); border:1px solid var(--border); color:var(--text-secondary); margin-left:0.5rem;" onclick="blockUser(${user.id})">Block 🚫</button>
+                    <button class="btn" style="background:var(--bg-main); border:1px solid var(--border); color:var(--text-secondary);" onclick="archiveChat(${dialogue.id})">Archive 🗑️</button>
                 </div>
             `;
+        }
+
+        async function archiveChat(id, skipConfirm = false) {
+            if (!skipConfirm && !confirm('Hide this chat?')) return;
+            try {
+                await fetch(`/dialogues/${id}/archive`, { method: 'POST' });
+
+                // Remove archived dialogue from local list
+                dialogues = dialogues.filter(d => d.id !== id);
+
+                // Find next chat to select
+                if (dialogues.length > 0) {
+                    selectChat(dialogues[0].id);
+                } else {
+                    currentDialogueId = null;
+                    document.getElementById('active-chat-name').innerHTML = '<div style="color:var(--text-secondary);">No active chats</div>';
+                    document.getElementById('messages-area').innerHTML = '<div style="padding:2rem; text-align:center; color:var(--text-secondary);">All caught up! 🎉</div>';
+                    document.querySelector('.input-area').style.display = 'none';
+                }
+
+                renderDialoguesList(); // Refresh sidebar without full reload if possible, but loadDialogues is safer
+                loadDialogues();
+            } catch (e) {
+                alert('Failed to archive');
+            }
         }
 
         function startEditName(userId, currentFirst, currentLast) {
@@ -447,13 +590,12 @@
 
         function renderMessages(messages) {
             const container = document.getElementById('messages-area');
-            container.innerHTML = '';
-
-            // Messages are typically ASC from backend now
-            // Scroll Logic
+            const previousScrollTop = container.scrollTop;
             const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
 
-            messages.forEach(m => {
+            container.innerHTML = '';
+
+            messages.forEach((m, index) => {
                 const div = document.createElement('div');
                 let type = 'received';
                 if (m.status === 'DRAFT') type = 'draft';
@@ -468,7 +610,6 @@
                     actionDiv.style.display = 'flex';
                     actionDiv.style.gap = '0.5rem';
 
-                    // Edit Button
                     const editBtn = document.createElement('button');
                     editBtn.className = 'btn btn-secondary';
                     editBtn.style.fontSize = '0.7rem';
@@ -476,15 +617,24 @@
                     editBtn.textContent = 'Edit';
                     editBtn.onclick = () => editDraft(m.id, m.text);
 
-                    // Approve Button
+                    const refineBtn = document.createElement('button');
+                    refineBtn.className = 'btn btn-secondary';
+                    refineBtn.style.fontSize = '0.7rem';
+                    refineBtn.style.padding = '0.2rem 0.5rem';
+                    refineBtn.innerHTML = '✨ Refine';
+                    refineBtn.title = 'Regenerate with new instructions';
+                    // Pass the text safely
+                    refineBtn.onclick = () => openPromptModal(currentDialogueId, m.text);
+
                     const sendBtn = document.createElement('button');
                     sendBtn.className = 'btn btn-primary';
                     sendBtn.style.fontSize = '0.7rem';
                     sendBtn.style.padding = '0.2rem 0.5rem';
                     sendBtn.textContent = 'Send';
-                    sendBtn.onclick = () => approveDraft(m.id, null); // Null means use existing text
+                    sendBtn.onclick = () => approveDraft(m.id, null);
 
                     actionDiv.appendChild(editBtn);
+                    actionDiv.appendChild(refineBtn);
                     actionDiv.appendChild(sendBtn);
                     div.appendChild(actionDiv);
                 }
@@ -492,10 +642,29 @@
                 container.appendChild(div);
             });
 
+            // "Generate Reply" & "Prompt" Button Logic
+            const lastMsg = messages[messages.length - 1];
+            if (lastMsg && lastMsg.sender === 'USER' && lastMsg.status === 'RECEIVED') {
+                const div = document.createElement('div');
+                div.style.textAlign = 'center';
+                div.style.padding = '1rem';
+                div.style.display = 'flex';
+                div.style.gap = '1rem';
+                div.style.justifyContent = 'center';
+                div.innerHTML = `
+                    <button id="regen-btn" class="btn btn-primary" onclick="regenerateDraft(${currentDialogueId}, this)">⚡ Generate Reply</button>
+                    <button id="prompt-btn" class="btn btn-secondary" onclick="openPromptModal(${currentDialogueId})">📝 Rules / Prompt</button>
+                `;
+                container.appendChild(div);
+            } else if (messages.length === 0) {
+                // Empty chat? Maybe show start button?
+            }
+
             if (isAtBottom) {
                 container.scrollTop = container.scrollHeight;
                 hideScrollBtn();
             } else {
+                container.scrollTop = previousScrollTop;
                 showScrollBtn();
             }
         }
@@ -577,6 +746,191 @@
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 sendManualMessage();
+            }
+        }
+
+        // --- Feedback / Coach Logic ---
+        let coachingMessageId = null;
+
+        function openCoachModal(msgId, currentFeedback) {
+            coachingMessageId = msgId;
+            document.getElementById('coach-modal').style.display = 'flex';
+            document.getElementById('coach-input').value = currentFeedback || '';
+            document.getElementById('coach-input').focus();
+        }
+
+        function closeCoachModal() {
+            document.getElementById('coach-modal').style.display = 'none';
+            coachingMessageId = null;
+        }
+
+        async function saveFeedback() {
+            const text = document.getElementById('coach-input').value;
+            if (!coachingMessageId) return;
+
+            try {
+                const res = await fetch(`/messages/${coachingMessageId}/feedback`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ feedback: text })
+                });
+
+                if (res.ok) {
+                    closeCoachModal();
+                    if (currentDialogueId) selectChat(currentDialogueId); // Refresh
+                } else {
+                    alert('Failed to save feedback');
+                }
+            } catch (e) {
+                alert('Error generating template: ' + e.message);
+            }
+        }
+
+        // --- Scout Logic ---
+        async function scanChat() {
+            const link = document.getElementById('scout-link').value;
+            const limit = document.getElementById('scout-limit').value || 50;
+            if (!link) {
+                alert('Please enter a chat link');
+                return;
+            }
+
+            const btn = document.querySelector('#scout-view .btn-primary');
+            const originalText = btn.textContent;
+            btn.textContent = 'Scanning... (this may take a while) ⏳';
+            btn.disabled = true;
+
+            document.getElementById('scout-results-area').style.display = 'block';
+            document.getElementById('scout-list').innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem;">Scanning...</div>';
+
+            try {
+                // Extract username from link if possible, or send raw
+                let username = link;
+                if (link.includes('t.me/')) username = link.split('t.me/')[1].split('/')[0];
+                if (username.startsWith('@')) username = username.substring(1);
+
+                const res = await fetch('/scan-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chatUsername: username, limit: parseInt(limit) })
+                });
+
+                if (!res.ok) throw new Error('Scan failed');
+
+                const data = await res.json();
+                renderScanResults(data.leads);
+
+            } catch (e) {
+                alert('Scan failed: ' + e.message);
+                document.getElementById('scout-list').innerHTML = `<div style="color:red; text-align:center;">Error: ${e.message}</div>`;
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function renderScanResults(leads) {
+            const container = document.getElementById('scout-list');
+            document.getElementById('scout-count').textContent = leads.length;
+
+            if (leads.length === 0) {
+                container.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem; color:var(--text-secondary);">No leads found matching keywords.</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+            leads.forEach(lead => {
+                const card = document.createElement('div');
+                card.className = 'stat-card';
+                card.style.display = 'flex';
+                card.style.flexDirection = 'column';
+                card.style.justifyContent = 'space-between';
+
+                const sender = lead.sender;
+                const name = sender.firstName || 'Unknown';
+                const username = sender.username ? '@' + sender.username : 'ID: ' + sender.id;
+
+                // Safe content
+                const safeName = name.replace(/'/g, "\\'");
+                // Escape only single quotes for onclick, keeping text mostly raw but safe
+                const safeText = lead.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+                card.innerHTML = `
+                    <div>
+                        <div style="font-weight:600; margin-bottom:0.2rem;">${name} <span style="font-weight:400; color:var(--text-secondary); font-size:0.8rem;">${username}</span></div>
+                        <div style="font-size:0.9rem; color:var(--text-main); margin-bottom:1rem; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;">
+                            ${lead.text}
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" style="width:100%;" 
+                        onclick="startScoutedDialogue('${sender.id}', '${safeName}', \`${safeText}\`, '${sender.accessHash || ''}')">
+                        Start Chat 💬
+                    </button>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function startScoutedDialogue(usernameId, name, contextText, accessHash) {
+            // Reuse existing logic, but ensure we send /scout/start
+            // We need to implement /scout/start in server if not exists, OR just use /start-dialogue handling
+            // The previous logic for leads-view (if any) used a similar approach.
+            // Let's call a new endpoint or the standard one with extra context.
+
+            try {
+                const res = await fetch('/scout/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: usernameId,
+                        name: name,
+                        context: contextText,
+                        accessHash: accessHash
+                    })
+                });
+
+                const data = await res.json();
+                if (data.dialogueId) {
+                    switchView('inbox');
+                    selectChat(data.dialogueId);
+                } else {
+                    alert('Failed to start chat');
+                }
+            } catch (e) {
+                alert('Error starting chat: ' + e.message);
+            }
+        }
+
+        async function regenerateDraft(dialogueId, btnElement) {
+            console.log('Regenerating for ID:', dialogueId);
+
+            // Use passed element or fallback to ID
+            const btn = btnElement || document.getElementById('regen-btn');
+
+            if (btn) {
+                btn.textContent = 'Generating... ⏳';
+                btn.disabled = true;
+            } else {
+                console.warn('Button element not found');
+            }
+
+            try {
+                // alert('Sending request...'); // Debug alert
+                const res = await fetch(`/dialogues/${dialogueId}/regenerate`, { method: 'POST' });
+                if (!res.ok) throw new Error('Request failed: ' + res.status);
+
+                if (btn) btn.textContent = 'Done! ✅';
+
+                setTimeout(() => {
+                    selectChat(dialogueId);
+                }, 1000);
+            } catch (e) {
+                console.error(e);
+                alert('Regeneration failed: ' + e.message);
+                if (btn) {
+                    btn.textContent = 'Retry ⚡';
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -664,42 +1018,73 @@
             });
         }
 
+        async function blockUser(userId) {
+            // Instant block, no confirmation
+            try {
+                await fetch(`/users/${userId}/block`, { method: 'POST' });
+                // alert('User blocked'); // Removed by request
+                // Optional: Archive chat automatically
+                if (currentDialogueId) archiveChat(currentDialogueId, true);
+            } catch (e) {
+                console.error('Failed to block', e);
+            }
+        }
+
+        async function reconnect() {
+            const btn = document.querySelector('#reconnect-section button');
+            const originalText = btn.textContent;
+            btn.textContent = 'Reconnecting...';
+            btn.disabled = true;
+            try {
+                const res = await fetch('/reconnect', { method: 'POST' });
+                if (res.ok) {
+                    alert('Reconnection initiated. Wait for status to turn green.');
+                    checkSystemStatus();
+                } else {
+                    alert('Failed to reconnect');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
         // Login Status
+        // Update checkSystemStatus to show reconnect button
         async function checkSystemStatus() {
+            const dot = document.getElementById('system-status-dot');
+            const text = document.getElementById('system-status-text');
+            const authSection = document.getElementById('auth-section');
+            const reconnectSection = document.getElementById('reconnect-section');
+            const userInfo = document.getElementById('user-info');
+            const usernameDisplay = document.getElementById('username-display');
+
             try {
                 const res = await fetch('/status');
                 const data = await res.json();
 
-                const dot = document.getElementById('system-status-dot');
-                const text = document.getElementById('system-status-text');
-                const authSection = document.getElementById('auth-section');
-                const userInfo = document.getElementById('user-info');
-                const userDisplay = document.getElementById('username-display');
-
                 if (data.connected) {
-                    dot.className = 'status-dot green';
+                    dot.className = 'status-dot green'; // Changed from style.background
                     text.textContent = 'Online';
                     authSection.style.display = 'none';
+                    reconnectSection.style.display = 'none';
                     userInfo.style.display = 'block';
                     if (data.me) {
-                        userDisplay.textContent = data.me.firstName || data.me.username || 'User';
+                        usernameDisplay.textContent = data.me.firstName || data.me.username || 'Me'; // Changed from 'User'
                     }
                 } else {
-                    dot.className = 'status-dot red';
+                    dot.className = 'status-dot red'; // Changed from style.background
                     text.textContent = 'Disconnected';
                     authSection.style.display = 'block';
+                    reconnectSection.style.display = 'block'; // Show reconnect
                     userInfo.style.display = 'none';
                 }
             } catch (e) {
-                console.error("Status check failed", e);
-                document.getElementById('system-status-text').textContent = 'Backend Offline';
-                document.getElementById('system-status-dot').className = 'status-dot red';
+                // For now, prompt user to check terminal or implement QR flow if Puppeteer
+                alert("Since we are using GramJS (Userbot), please check the server terminal for login prompts if not connected.");
             }
-        }
-
-        async function startAuthFlow() {
-            // For now, prompt user to check terminal or implement QR flow if Puppeteer
-            alert("Since we are using GramJS (Userbot), please check the server terminal for login prompts if not connected.");
         }
 
         // Poll status
@@ -797,17 +1182,18 @@
                     container.innerHTML = '<div style="color:var(--text-secondary);">No keywords found in last 100 messages.</div>';
                 }
 
-                leads.forEach(lead => {
+                leads.forEach((lead, index) => {
                     const div = document.createElement('div');
                     div.style.padding = '0.75rem';
                     div.style.border = '1px solid var(--border)';
                     div.style.borderRadius = '0.5rem';
                     div.style.background = 'var(--bg-main)';
+                    div.style.marginBottom = '0.5rem';
 
                     const name = lead.sender.firstName || 'Unknown';
                     const username = lead.sender.username ? `@${lead.sender.username}` : 'No username';
 
-                    // Robust escaping for inline onclick
+                    // Robust escaping
                     const safeText = lead.text
                         .replace(/\\/g, '\\\\')
                         .replace(/'/g, "\\'")
@@ -820,13 +1206,23 @@
 
                     const safeUsername = (lead.sender.username || lead.sender.id).toString();
 
+                    const isLong = lead.text.length > 100;
+                    const shortText = isLong ? lead.text.substring(0, 100) + '...' : lead.text;
+                    // Escape for HTML display
+                    const safeAccessHash = (lead.sender.accessHash || '');
+
+                    const displayFull = lead.text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const displayShort = shortText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
                     div.innerHTML = `
                         <div style="display:flex; justify-content:space-between; align-items:start;">
-                            <div>
+                            <div style="flex:1; margin-right:1rem;">
                                 <div style="font-weight:600;">${name} <span style="font-size:0.8rem; color:var(--text-secondary);">${username}</span></div>
-                                <div style="margin-top:0.25rem; font-size:0.9rem;">"${lead.text.substring(0, 100)}..."</div>
+                                
+                                <div id="scan-text-${index}" style="margin-top:0.25rem; font-size:0.9rem; white-space: pre-wrap;">${displayShort}</div>
+                                ${isLong ? `<a href="#" onclick="event.preventDefault(); toggleScanText(${index}, '${displayFull.replace(/'/g, "\\'").replace(/\n/g, '\\n')}', '${displayShort.replace(/'/g, "\\'").replace(/\n/g, '\\n')}')" id="scan-toggle-${index}" style="font-size:0.8rem; color:var(--primary);">Read more</a>` : ''}
                             </div>
-                            <button class="btn btn-primary" style="font-size:0.7rem;" onclick="startScoutedDialogue('${safeUsername}', '${safeName}', '${safeText.substring(0, 50)}')">
+                            <button class="btn btn-primary" style="font-size:0.7rem; white-space:nowrap;" onclick="startScoutedDialogue('${safeUsername}', '${safeName}', '${safeText.substring(0, 50)}', '${safeAccessHash}')">
                                 Chat
                             </button>
                         </div>
@@ -842,33 +1238,221 @@
             }
         }
 
-        async function startScoutedDialogue(usernameId, name, contextText) {
+        async function startScoutedDialogue(usernameId, name, contextText, accessHash) {
             try {
-                // Switch to inbox
-                switchView('inbox');
-
-                // Workaround: Alert operator to type to this user.
-                const note = prompt(`Start chat with @${usernameId}?`, `Привет! Вижу вы ищете: ${contextText}`);
-                if (note) {
-                    await fetch('/send', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ username: usernameId, message: note })
-                    });
-
-                    // Wait a bit and refresh
-                    setTimeout(() => {
-                        loadDialogues();
-                        // Ideally select it, but we need ID. LoadDialogues will show it at top.
-                    }, 2000);
+                const res = await fetch('/scout/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: usernameId,
+                        name: name,
+                        context: contextText,
+                        accessHash: accessHash || undefined
+                    })
+                });
+                const data = await res.json();
+                if (data.dialogueId) {
+                    loadDialogues(); // Refresh sidebar
+                    setTimeout(() => selectChat(data.dialogueId), 500); // Open chat
                 }
-
             } catch (e) {
                 alert('Failed to start chat');
             }
         }
+
+        // --- Prompt / Rules Logic ---
+        let promptDialogueId = null;
+
+        function openPromptModal(id, targetText = null) {
+            promptDialogueId = id;
+            document.getElementById('prompt-input').value = '';
+            document.getElementById('prompt-save-rule').checked = false; // Reset checkbox
+
+            const targetContainer = document.getElementById('prompt-target-container');
+            const targetEl = document.getElementById('prompt-target-text');
+
+            if (targetText) {
+                targetContainer.style.display = 'block';
+                targetEl.textContent = targetText;
+            } else {
+                targetContainer.style.display = 'none';
+            }
+
+            document.getElementById('prompt-modal').style.display = 'flex';
+            document.getElementById('prompt-input').focus();
+        }
+
+        function closePromptModal() {
+            document.getElementById('prompt-modal').style.display = 'none';
+            promptDialogueId = null;
+        }
+
+        async function submitPrompt() {
+            const instructions = document.getElementById('prompt-input').value;
+            const saveAsRule = document.getElementById('prompt-save-rule').checked;
+
+            if (!instructions) return;
+
+            const btn = document.querySelector('#prompt-modal .btn-primary');
+            const originalText = btn.textContent;
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+
+            try {
+                // 1. Generate
+                const res = await fetch(`/dialogues/${promptDialogueId}/regenerate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ instructions })
+                });
+
+                // 2. Save Rule if checked
+                if (saveAsRule) {
+                    await fetch('/rules', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            content: instructions,
+                            isGlobal: false,
+                            userId: dialogues.find(d => d.id === promptDialogueId)?.user?.id // Need user ID
+                        })
+                    });
+                }
+
+                if (res.ok) {
+                    closePromptModal();
+                    selectChat(promptDialogueId);
+                } else {
+                    const err = await res.json();
+                    alert('Failed: ' + (err.error || 'Unknown error'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- Rules Logic ---
+        async function loadRules() {
+            try {
+                const res = await fetch('/rules');
+                const rules = await res.json();
+                renderRules(rules);
+            } catch (e) {
+                console.error("Failed to load rules", e);
+            }
+        }
+
+        function renderRules(rules) {
+            const container = document.getElementById('rules-list');
+            container.innerHTML = '';
+
+            if (rules.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-secondary); text-align:center;">No rules found.</div>';
+                return;
+            }
+
+            rules.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'stat-card';
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+
+                const typeBadge = r.isGlobal
+                    ? '<span class="badge" style="background:#8e44ad;">GLOBAL</span>'
+                    : '<span class="badge" style="background:#f39c12;">USER</span>';
+
+                div.innerHTML = `
+                    <div>
+                        <div style="margin-bottom:0.5rem;">${typeBadge} <span style="font-size:0.8rem; color:var(--text-secondary);">${new Date(r.createdAt).toLocaleDateString()}</span></div>
+                        <div style="font-size:1rem;">${r.content}</div>
+                        ${r.userId ? `<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.2rem;">User ID: ${r.userId}</div>` : ''}
+                    </div>
+                    <button class="btn" style="color:var(--danger);" onclick="deleteRule(${r.id})"><ion-icon name="trash-outline"></ion-icon></button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function deleteRule(id) {
+            if (!confirm('Delete this rule?')) return;
+            try {
+                await fetch(`/rules/${id}`, { method: 'DELETE' });
+                loadRules();
+            } catch (e) { alert('Failed to delete rule'); }
+        }
+
+        // --- Init ---
+        // Load initial data
+        refreshStats();
+        loadTemplates();
+
+        // Add hook to switchView for Rules
+        const originalSwitchView = switchView;
+        switchView = (viewId) => {
+            // Hide all views
+            document.querySelectorAll('.view-container, #inbox-view').forEach(el => {
+                el.classList.remove('active');
+                if (el.id === 'inbox-view') el.style.display = 'none';
+            });
+
+            // Show selected view
+            const target = document.getElementById(viewId + '-view');
+            if (viewId === 'inbox') {
+                target.style.display = 'flex';
+                loadDialogues();
+            } else if (viewId === 'rules') {
+                loadRules();
+            }
+            target.classList.add('active');
+
+            // Update Nav link
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            const navLink = document.querySelector(`.nav-link[onclick="switchView('${viewId}')"]`);
+            if (navLink) navLink.classList.add('active');
+        };
+
     </script>
+
+    <!-- Prompt Modal -->
+    <div id="prompt-modal" class="modal-overlay"
+        style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div class="modal-content"
+            style="background:var(--bg-card); padding:2rem; border-radius:12px; width:500px; border:1px solid var(--border);">
+            <h3>Regeneration Rules 🧠</h3>
+
+            <div id="prompt-target-container"
+                style="margin-bottom:1rem; padding:0.5rem; background:var(--bg-secondary); border-left: 3px solid var(--primary); border-radius:4px; display:none;">
+                <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.25rem;">Refining message:
+                </div>
+                <div id="prompt-target-text"
+                    style="font-size:0.9rem; font-style:italic; max-height:100px; overflow-y:auto;"></div>
+            </div>
+
+            <p style="color:var(--text-secondary); margin-bottom:1rem;">Give specific instructions to the AI for this
+                reply (e.g., "Be more casual", "Ask about budget").</p>
+            <textarea id="prompt-input" rows="4"
+                style="width:100%; padding:0.5rem; border-radius:8px; border:1px solid var(--border); background:var(--bg-main); color:var(--text-main); margin-bottom:1rem;"
+                placeholder="Enter instructions..."></textarea>
+
+            <div style="margin-bottom:1rem; display:flex; align-items:center;">
+                <input type="checkbox" id="prompt-save-rule" style="margin-right:0.5rem;">
+                <label for="prompt-save-rule"
+                    style="color:var(--text-secondary); font-size:0.9rem; cursor:pointer;">Save as <strong>Rule</strong>
+                    for this client</label>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem;">
+                <button class="btn btn-secondary" onclick="closePromptModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="submitPrompt()">Regenerate with Rules</button>
+            </div>
+        </div>
+    </div>
+</body>
+</div>
 </body>
 
 </html>
-```

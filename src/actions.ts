@@ -6,7 +6,9 @@ const prisma = new PrismaClient();
 
 // --- DB Helpers ---
 
-export async function ensureUserAndDialogue(username: string, name: string) {
+// --- DB Helpers ---
+
+export async function ensureUserAndDialogue(username: string, name: string, accessHash?: string) {
     // 1. Find or Create User
     let user = await prisma.user.findFirst({
         where: { telegramId: username }
@@ -18,16 +20,22 @@ export async function ensureUserAndDialogue(username: string, name: string) {
                 telegramId: username,
                 username: username,
                 firstName: name,
-                status: 'LEAD'
+                status: 'LEAD',
+                accessHash: accessHash || null
             }
         });
         console.log(`[DB] Created new user: ${username}`);
     } else {
         // Update info if changed
-        if (user.firstName !== name || user.username !== username) {
+        const dataToUpdate: any = {};
+        if (user.firstName !== name) dataToUpdate.firstName = name;
+        if (user.username !== username) dataToUpdate.username = username;
+        if (accessHash && user.accessHash !== accessHash) dataToUpdate.accessHash = accessHash;
+
+        if (Object.keys(dataToUpdate).length > 0) {
             user = await prisma.user.update({
                 where: { id: user.id },
-                data: { firstName: name, username: username }
+                data: dataToUpdate
             });
         }
     }
@@ -53,14 +61,21 @@ export async function ensureUserAndDialogue(username: string, name: string) {
 
 export async function saveMessageToDb(dialogueId: number, sender: MessageSender, text: string, status: MessageStatus = 'SENT') {
     try {
-        const msg = await prisma.message.create({
-            data: {
-                dialogueId,
-                sender,
-                text,
-                status
-            }
-        });
+        const [msg] = await prisma.$transaction([
+            prisma.message.create({
+                data: {
+                    dialogueId,
+                    sender,
+                    text,
+                    status
+                }
+            }),
+            prisma.dialogue.update({
+                where: { id: dialogueId },
+                data: { updatedAt: new Date() }
+            })
+        ]);
+
         console.log(`[DB] Saved ${sender} message: "${text.substring(0, 20)}..."`);
         return msg;
     } catch (e) {
@@ -82,8 +97,10 @@ export async function sendDraftMessage(page: any, messageId: number, customText?
         throw new Error('Message or User not found');
     }
 
-    const username = message.dialogue.user.username;
-    if (!username) throw new Error('User has no username');
+    const username = message.dialogue.user.telegramId || message.dialogue.user.username; // Use telegramId as primary identifier if available
+    const accessHash = message.dialogue.user.accessHash;
+
+    if (!username) throw new Error('User has no username/ID');
 
     // Check if client is connected
     const client = getClient();
@@ -94,9 +111,22 @@ export async function sendDraftMessage(page: any, messageId: number, customText?
     const text = customText || message.text;
 
     try {
-        console.log(`[Msg] Sending to @${username}: "${text}"`);
-        await client.sendMessage(username, { message: text });
-        console.log(`[Msg] Sent approved message to @${username}`);
+        let peer: any = username;
+
+        // Use InputPeerUser if we have accessHash and it looks like an ID
+        if (accessHash && /^\d+$/.test(username)) {
+            // We need to construct InputPeerUser
+            // GramJS Api is imported at top
+            const userId = BigInt(username) as any;
+            const hash = BigInt(accessHash) as any;
+            peer = new Api.InputPeerUser({ userId, accessHash: hash });
+            console.log(`[Msg] Sending to ID ${username} with AccessHash...`);
+        } else {
+            console.log(`[Msg] Sending to @${username}: "${text}"`);
+        }
+
+        await client.sendMessage(peer, { message: text });
+        console.log(`[Msg] Sent approved message to ${username}`);
 
         // Update DB Status
         return await prisma.message.update({
@@ -126,14 +156,21 @@ export async function sendMessageToUser(page: any, username: string, text: strin
 }
 
 export async function createDraftMessage(dialogueId: number, text: string) {
-    return await prisma.message.create({
-        data: {
-            dialogueId,
-            sender: 'SIMULATOR', // Keep legacy enum for now
-            text,
-            status: MessageStatus.DRAFT
-        }
-    });
+    const [msg] = await prisma.$transaction([
+        prisma.message.create({
+            data: {
+                dialogueId,
+                sender: 'SIMULATOR', // Keep legacy enum for now
+                text,
+                status: MessageStatus.DRAFT
+            }
+        }),
+        prisma.dialogue.update({
+            where: { id: dialogueId },
+            data: { updatedAt: new Date() }
+        })
+    ]);
+    return msg;
 }
 
 // Stubs for compatibility
@@ -175,7 +212,8 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
                         id: sender.id.toString(),
                         username: sender.username,
                         firstName: sender.firstName,
-                        lastName: sender.lastName
+                        lastName: sender.lastName,
+                        accessHash: sender.accessHash ? sender.accessHash.toString() : null
                     }
                 });
             }

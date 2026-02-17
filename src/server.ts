@@ -71,20 +71,35 @@ fastify.get('/messages', async (request, reply) => {
     }
 });
 
-fastify.get('/dialogues', async (request, reply) => {
+fastify.get('/dialogues', async (req, reply) => {
     try {
         const dialogues = await prisma.dialogue.findMany({
             where: { status: 'ACTIVE' },
             include: {
                 user: true,
-                messages: { orderBy: { createdAt: 'desc' }, take: 1 }
+                messages: {
+                    orderBy: { id: 'desc' },
+                    take: 1
+                }
             },
             orderBy: { updatedAt: 'desc' }
         });
         return dialogues;
     } catch (e) {
-        request.log.error(e);
-        return [];
+        return reply.code(500).send({ error: 'Failed to fetch dialogues' });
+    }
+});
+
+fastify.post('/dialogues/:id/archive', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        await prisma.dialogue.update({
+            where: { id: Number(id) },
+            data: { status: 'ARCHIVED' }
+        });
+        return { success: true };
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed' });
     }
 });
 
@@ -98,9 +113,16 @@ fastify.get('/dialogues/:id', async (req, reply) => {
                 messages: { orderBy: { createdAt: 'asc' } }
             }
         });
+        console.log(`DEBUG: Dialogue ${id} result:`, dialogue ? 'Found' : 'Null');
+        if (!dialogue) {
+            console.log(`DEBUG: Dialogue ${id} is null, returning 404`);
+            return reply.code(404).send({ error: 'Dialogue not found (null)' });
+        }
         return dialogue;
     } catch (e) {
-        return reply.code(404).send({ error: 'Dialogue not found' });
+        console.error(`DEBUG: Error fetching dialogue ${id}:`, e);
+        req.log.error(e);
+        return reply.code(404).send({ error: 'Dialogue not found (exception)' });
     }
 });
 
@@ -228,6 +250,31 @@ fastify.put('/users/:id', async (req, reply) => {
         return user;
     } catch (e) {
         return reply.code(500).send({ error: 'Failed to update user' });
+
+    }
+});
+
+fastify.post('/users/:id/block', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        await prisma.user.update({
+            where: { id: parseInt(id) },
+            data: { status: 'BLOCKED' }
+        });
+        return { success: true };
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to block user' });
+    }
+});
+
+fastify.post('/reconnect', async (req, reply) => {
+    try {
+        const { reconnectClient } = await import('./client');
+        await reconnectClient();
+        return { success: true };
+    } catch (e) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Reconnection failed' });
     }
 });
 
@@ -245,6 +292,193 @@ fastify.post('/scan-chat', async (req, reply) => {
     } catch (e: any) {
         req.log.error(e);
         return reply.code(500).send({ error: 'Scan failed', details: e.message });
+    }
+});
+
+fastify.post('/scout/start', async (req, reply) => {
+    const { username, name, context, accessHash } = req.body as { username: string, name: string, context: string, accessHash?: string };
+    if (!username || !context) return reply.code(400).send({ error: 'Missing fields' });
+
+    try {
+        const { ensureUserAndDialogue, saveMessageToDb, createDraftMessage } = await import('./actions');
+        const { generateResponse } = await import('./gpt');
+        const { PrismaClient } = await import('@prisma/client');
+
+        // 1. Create/Get User & Dialogue
+        const { user, dialogue } = await ensureUserAndDialogue(username, name, accessHash);
+
+        // 2. Save "Context" message (as if user sent it)
+        // Check if last message is duplicate to avoid spamming if clicked multiple times
+        const lastMsg = await prisma.message.findFirst({
+            where: { dialogueId: dialogue.id },
+            orderBy: { id: 'desc' }
+        });
+
+        if (!lastMsg || lastMsg.text !== context) {
+            await saveMessageToDb(dialogue.id, 'USER', context, 'RECEIVED');
+        }
+
+        // 3. Generate Draft (AI)
+        // Fetch brief history
+        const recentMessages = await prisma.message.findMany({
+            where: { dialogueId: dialogue.id },
+            orderBy: { id: 'desc' },
+            take: 5
+        });
+
+        const history = recentMessages.reverse().map(m => ({
+            sender: m.sender,
+            text: m.text
+        }));
+
+        const facts = (user.facts as any) || {};
+        const templates = {}; // Could fetch templates here
+        const kbItems: any[] = [];
+
+        const stage = dialogue.stage || 'DISCOVERY';
+
+        const gptResult = await generateResponse(
+            history,
+            stage as any,
+            facts,
+            templates,
+            kbItems
+        );
+
+        if (gptResult) {
+            await createDraftMessage(dialogue.id, gptResult.reply);
+        }
+
+        return { dialogueId: dialogue.id, user };
+
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to start scouted chat', details: e.message });
+    }
+});
+
+fastify.post('/messages/:id/feedback', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { feedback } = req.body as { feedback: string };
+    try {
+        await prisma.message.update({
+            where: { id: Number(id) },
+            data: { feedback }
+        });
+        return { success: true };
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed' });
+    }
+});
+
+fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { instructions } = req.body as { instructions?: string } || {};
+
+    try {
+        const { createDraftMessage } = await import('./actions');
+        const { generateResponse } = await import('./gpt');
+
+        const dialogue = await prisma.dialogue.findUnique({
+            where: { id: Number(id) },
+            include: { user: true }
+        });
+        if (!dialogue) return reply.code(404).send({ error: 'Not found' });
+
+        // Fetch history
+        const recentMessages = await prisma.message.findMany({
+            where: { dialogueId: dialogue.id },
+            orderBy: { id: 'desc' },
+            take: 10
+        });
+
+        const history = recentMessages.reverse().map(m => ({
+            sender: m.sender,
+            text: m.text
+        }));
+
+        const facts = (dialogue.user.facts as any) || {};
+
+        // Fetch Rules (Global + User specific)
+        const rules = await prisma.rule.findMany({
+            where: {
+                OR: [
+                    { isGlobal: true },
+                    { userId: dialogue.userId }
+                ],
+                isActive: true
+            }
+        });
+
+        const ruleStrings = rules.map(r => r.content);
+
+        // Pass instructions and rules to GPT
+        const gptResult = await generateResponse(
+            history,
+            dialogue.stage as any,
+            facts,
+            {},
+            [],
+            instructions, // <--- New Argument
+            ruleStrings   // <--- Passed Rules
+        );
+
+        if (gptResult) {
+            await createDraftMessage(dialogue.id, gptResult.reply);
+            return { success: true };
+        } else {
+            return reply.code(500).send({ error: 'GPT failed to generate response' });
+        }
+
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed' });
+    }
+});
+
+// --- Rules Management ---
+
+fastify.get('/rules', async (req, reply) => {
+    const { userId } = req.query as { userId?: string };
+    try {
+        const where: any = { isActive: true };
+        if (userId) {
+            where.OR = [
+                { isGlobal: true },
+                { userId: Number(userId) }
+            ];
+        }
+        const rules = await prisma.rule.findMany({ where, orderBy: { createdAt: 'desc' } });
+        return rules;
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to fetch rules' });
+    }
+});
+
+fastify.post('/rules', async (req, reply) => {
+    const { content, isGlobal, userId } = req.body as { content: string, isGlobal?: boolean, userId?: number };
+    try {
+        const rule = await prisma.rule.create({
+            data: {
+                content,
+                isGlobal: isGlobal || false,
+                userId: userId ? Number(userId) : null,
+                isActive: true
+            }
+        });
+        return rule;
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to create rule' });
+    }
+});
+
+fastify.delete('/rules/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        await prisma.rule.delete({ where: { id: Number(id) } });
+        return { success: true };
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to delete rule' });
     }
 });
 

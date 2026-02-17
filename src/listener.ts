@@ -37,6 +37,12 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
 
         // 1. Save to DB
         const { user, dialogue } = await ensureUserAndDialogue(username, firstName);
+
+        if (user.status === 'BLOCKED') {
+            console.log(`[Listener] Ignoring message from BLOCKED user ${username}`);
+            return;
+        }
+
         await saveMessageToDb(dialogue.id, 'USER', text, 'RECEIVED');
 
         // 2. Generate AI Reply (Draft)
@@ -59,13 +65,27 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
         const templates = {};
         const kbItems: any[] = [];
 
+        // Fetch Rules
+        const rules = await prisma.rule.findMany({
+            where: {
+                OR: [
+                    { isGlobal: true },
+                    { userId: user.id }
+                ],
+                isActive: true
+            }
+        });
+        const ruleStrings = rules.map(r => r.content);
+
         console.log(`[GPT] Generating reply for ${username}...`);
         const gptResult = await generateResponse(
             history,
             currentStage,
             currentFacts,
             templates,
-            kbItems
+            kbItems,
+            undefined, // No custom instructions for auto-reply
+            ruleStrings
         );
 
         if (gptResult) {
