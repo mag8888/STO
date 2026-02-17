@@ -11,33 +11,46 @@ export const useChat = () => {
     const [showRejected, setShowRejected] = useState(false);
 
     // Fetch Dialogues
-    const loadDialogues = useCallback(async () => {
+    const loadDialogues = useCallback(async (isBackground = false) => {
         try {
-            setLoading(true);
+            if (!isBackground) setLoading(true);
             const res = await fetch('/dialogues');
             if (!res.ok) throw new Error('Failed to fetch dialogues');
             const data: Dialogue[] = await res.json();
             setDialogues(data);
-
-            // Update current dialogue if selected
-            if (currentDialogue) {
-                const updated = data.find(d => d.id === currentDialogue.id);
-                if (updated) setCurrentDialogue(updated);
-            }
         } catch (err) {
             console.error(err);
         } finally {
-            setLoading(false);
+            if (!isBackground) setLoading(false);
         }
-    }, [currentDialogue]);
+    }, []);
 
-    // Initial Load & Polling
+    // Initial Load & Polling for List
     useEffect(() => {
-        loadDialogues();
-        // Poll every 10s (less aggressive than before)
-        const interval = setInterval(loadDialogues, 10000);
+        loadDialogues(false);
+        // Poll every 10s
+        const interval = setInterval(() => loadDialogues(true), 10000);
         return () => clearInterval(interval);
     }, [loadDialogues]);
+
+    // Poll for Active Chat (Silent)
+    useEffect(() => {
+        if (!currentDialogue) return;
+
+        const pollActiveChat = async () => {
+            try {
+                const res = await fetch(`/dialogues/${currentDialogue.id}`);
+                if (res.ok) {
+                    const full: Dialogue = await res.json();
+                    // Only update if necessary? For now just update to get new messages.
+                    setCurrentDialogue(full);
+                }
+            } catch (e) { console.error(e); }
+        };
+
+        const interval = setInterval(pollActiveChat, 5000);
+        return () => clearInterval(interval);
+    }, [currentDialogue?.id]);
 
     // Derived State: Filtered List
     const filteredDialogues = dialogues.filter(d => {
