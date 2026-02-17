@@ -59,4 +59,4 @@ EXPOSE 3000
 
 # Start command
 # Start command with DB migration
-CMD ["sh", "-c", "npx prisma db push && node dist/server.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node dist/server.js"]
