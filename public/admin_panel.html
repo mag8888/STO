@@ -622,39 +622,39 @@
             } catch (e) {
                 area.innerHTML = 'Error loading messages';
             }
-        }
-        //    } // Removed premature closing brace
-        // Try to find element by onclick attribute or similar if needed, but for now just removing active class is enough.
-        // Ideally we should add ID to chat-item div.
 
-        // Fetch full details
-        console.log('Fetching dialogue details for ID:', id);
-        try {
-            const res = await fetch(`/dialogues/${id}`);
-            if (!res.ok) {
-                if (res.status === 404) {
-                    // Chat likely archived or deleted
-                    console.warn('Chat not found (might be archived)');
-                    loadDialogues(); // Refresh list to remove stale entry
+            //    } // Removed premature closing brace
+            // Try to find element by onclick attribute or similar if needed, but for now just removing active class is enough.
+            // Ideally we should add ID to chat-item div.
+
+            // Fetch full details
+            console.log('Fetching dialogue details for ID:', id);
+            try {
+                const res = await fetch(`/dialogues/${id}`);
+                if (!res.ok) {
+                    if (res.status === 404) {
+                        // Chat likely archived or deleted
+                        console.warn('Chat not found (might be archived)');
+                        loadDialogues(); // Refresh list to remove stale entry
+                        return;
+                    }
+                    throw new Error('Failed to load chat');
+                }
+
+                const dialogue = await res.json();
+
+                if (!dialogue || !dialogue.user) {
+                    console.error('Dialogue data incomplete', dialogue);
                     return;
                 }
-                throw new Error('Failed to load chat');
+
+                renderChatHeader(dialogue);
+                renderMessages(dialogue.messages);
+            } catch (e) {
+                console.error("Failed to load chat details", e);
+                const area = document.getElementById('messages-area');
+                area.innerHTML = '<div style="padding:1rem; color:red;">Failed to load chat.</div>';
             }
-
-            const dialogue = await res.json();
-
-            if (!dialogue || !dialogue.user) {
-                console.error('Dialogue data incomplete', dialogue);
-                return;
-            }
-
-            renderChatHeader(dialogue);
-            renderMessages(dialogue.messages);
-        } catch (e) {
-            console.error("Failed to load chat details", e);
-            const area = document.getElementById('messages-area');
-            area.innerHTML = '<div style="padding:1rem; color:red;">Failed to load chat.</div>';
-        }
         }
 
         function renderChatHeader(dialogue) {
