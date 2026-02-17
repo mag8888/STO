@@ -2,9 +2,10 @@ import { NewMessage } from "telegram/events";
 import { getClient } from "./client";
 import { ensureUserAndDialogue, saveMessageToDb, createDraftMessage } from "./actions";
 import { generateResponse } from "./gpt";
-import { PrismaClient, DialogueStage } from '@prisma/client';
+import { DialogueStage } from '@prisma/client'; // Removed PrismaClient
+import prisma from './db'; // Use shared instance
 
-const prisma = new PrismaClient();
+// const prisma = new PrismaClient(); // Removed
 
 export async function startListener(page: any) { // 'page' arg kept for compatibility but unused
     const client = getClient();
@@ -24,9 +25,30 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
 
         const username = sender.username || sender.id.toString();
         const firstName = sender.firstName || "Unknown";
-        const text = message.text;
+        const text = message.text || "";
 
         console.log(`[Listener] New message from ${username}: ${text}`);
+
+        // --- Ignore Triggers Check ---
+        try {
+            const triggers = await prisma.ignoreTrigger.findMany();
+            const shouldIgnore = triggers.some(t => {
+                if (t.type === 'USERNAME') {
+                    return username.toLowerCase() === t.keyword.toLowerCase();
+                }
+                if (t.type === 'KEYWORD') {
+                    return text.toLowerCase().includes(t.keyword.toLowerCase());
+                }
+                return false;
+            });
+
+            if (shouldIgnore) {
+                console.log(`[Listener] Message ignored by trigger.`);
+                return;
+            }
+        } catch (e) {
+            console.error(`[Listener] Error checking triggers: ${e}`);
+        }
 
         // Mark as read
         try {
@@ -38,8 +60,8 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
         // 1. Save to DB
         const { user, dialogue } = await ensureUserAndDialogue(username, firstName);
 
-        if (user.status === 'BLOCKED') {
-            console.log(`[Listener] Ignoring message from BLOCKED user ${username}`);
+        if (user.status === 'BLOCKED' || user.status === 'REJECTED') { // Added REJECTED check
+            console.log(`[Listener] Ignoring message from BLOCKED/REJECTED user ${username}`);
             return;
         }
 

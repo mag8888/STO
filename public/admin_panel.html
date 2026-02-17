@@ -287,6 +287,35 @@
             </div>
         </div>
 
+        <!-- Triggers View -->
+        <div id="triggers-view" class="main-content" style="display:none;">
+            <div class="header">
+                <h1>Ignore Triggers 🚫</h1>
+                <!-- <button class="btn btn-primary" onclick="openAddTriggerModal()">+ Add Trigger</button> -->
+            </div>
+
+            <div class="card">
+                <h3>Add New Trigger</h3>
+                <div style="display:flex; gap:1rem; margin-top:1rem;">
+                    <input type="text" id="trigger-keyword" class="search-input"
+                        placeholder="Keyword or Username to ignore..." style="flex:1;">
+                    <select id="trigger-type" class="search-input" style="width:150px;">
+                        <option value="KEYWORD">Keyword</option>
+                        <option value="USERNAME">Username</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="addTrigger()">Add</button>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top:2rem;">
+                <h3>Active Triggers</h3>
+                <div id="triggers-list" style="margin-top:1rem; display:flex; flex-wrap:wrap; gap:1rem;">
+                    <!-- Triggers will be loaded here -->
+                    <div style="padding:1rem; color:var(--text-secondary);">Loading...</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Rules View -->
         <div id="rules-view" class="view-container">
             <div class="view-header">
@@ -594,6 +623,7 @@
                 area.innerHTML = 'Error loading messages';
             }
         }
+        //    } // Removed premature closing brace
         // Try to find element by onclick attribute or similar if needed, but for now just removing active class is enough.
         // Ideally we should add ID to chat-item div.
 
@@ -1652,33 +1682,98 @@
             }
         }
 
+        // --- Triggers Logic ---
+        async function loadTriggers() {
+            const list = document.getElementById('triggers-list');
+            try {
+                const res = await fetch('/triggers');
+                const triggers = await res.json();
+
+                if (triggers.length === 0) {
+                    list.innerHTML = '<div style="padding:1rem; color:var(--text-secondary);">No triggers found.</div>';
+                    return;
+                }
+
+                list.innerHTML = triggers.map(t => `
+                    <div style="background:var(--bg-card); padding:0.5rem 1rem; border-radius:30px; border:1px solid var(--border); display:flex; align-items:center; gap:0.5rem;">
+                        <span style="color:var(--text-secondary); font-size:0.8rem;">[${t.type}]</span>
+                        <span>${t.keyword}</span>
+                        <button onclick="deleteTrigger(${t.id})" style="background:none; border:none; color:var(--text-secondary); cursor:pointer;">&times;</button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                list.innerHTML = 'Error loading triggers';
+            }
+        }
+
+        async function addTrigger() {
+            const keyword = document.getElementById('trigger-keyword').value;
+            const type = document.getElementById('trigger-type').value;
+
+            if (!keyword) return;
+
+            try {
+                const res = await fetch('/triggers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keyword, type })
+                });
+                if (res.ok) {
+                    document.getElementById('trigger-keyword').value = '';
+                    loadTriggers();
+                } else {
+                    alert('Failed to add trigger');
+                }
+            } catch (e) {
+                alert('Error adding trigger');
+            }
+        }
+
+        async function deleteTrigger(id) {
+            if (!confirm('Remove this trigger?')) return;
+            try {
+                await fetch(`/triggers/${id}`, { method: 'DELETE' });
+                loadTriggers();
+            } catch (e) {
+                alert('Failed to delete trigger');
+            }
+        }
+
         // --- Init ---
         // Load initial data
         refreshStats();
         loadTemplates();
 
-        // Add hook to switchView for Rules
+        // Add hook to switchView for Rules & Triggers
         const originalSwitchView = switchView;
         switchView = (viewId) => {
             // Hide all views
-            document.querySelectorAll('.view-container, #inbox-view').forEach(el => {
+            document.querySelectorAll('.view-container, #inbox-view, .main-content').forEach(el => {
                 el.classList.remove('active');
-                if (el.id === 'inbox-view') el.style.display = 'none';
+                el.style.display = 'none';
             });
 
             // Show selected view
             const target = document.getElementById(viewId + '-view');
-            if (viewId === 'inbox') {
-                target.style.display = 'flex';
-                loadDialogues();
-            } else if (viewId === 'rules') {
-                loadRules();
+            // Check if target exists (triggers-view might be missing if not added yet, but we added it)
+            if (target) {
+                target.style.display = 'block'; // Default block
+                if (viewId === 'inbox') {
+                    target.style.display = 'flex';
+                    loadDialogues();
+                } else if (viewId === 'rules') {
+                    loadRules();
+                } else if (viewId === 'triggers') {
+                    loadTriggers();
+                }
+                target.classList.add('active');
             }
-            target.classList.add('active');
 
             // Update Nav link
-            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-            const navLink = document.querySelector(`.nav-link[onclick="switchView('${viewId}')"]`);
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            // Try to match by onclick text or just ignore active state for now if complex
+            // We used 'nav-item' class in HTML
+            const navLink = document.querySelector(`.nav-item[onclick="switchView('${viewId}')"]`);
             if (navLink) navLink.classList.add('active');
         };
 

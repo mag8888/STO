@@ -365,6 +365,24 @@ fastify.post('/scout/start', async (req, reply) => {
     if (!username || !context) return reply.code(400).send({ error: 'Missing fields' });
 
     try {
+        // 0. Check Ignore Triggers
+        const triggers = await prisma.ignoreTrigger.findMany();
+        const shouldIgnore = triggers.some(t => {
+            if (t.type === 'USERNAME') {
+                return username.toLowerCase() === t.keyword.toLowerCase();
+            }
+            if (t.type === 'KEYWORD') {
+                // For scouting, we might check context or bio if available, but context is usually the message we sent or they sent.
+                // Let's check context.
+                return context.toLowerCase().includes(t.keyword.toLowerCase());
+            }
+            return false;
+        });
+
+        if (shouldIgnore) {
+            return reply.send({ ignored: true, message: 'User matches ignore triggers' });
+        }
+
         // 1. Create/Get User & Dialogue
         const { user, dialogue } = await ensureUserAndDialogue(username, name, accessHash);
 
@@ -627,6 +645,48 @@ fastify.post('/users/:id/status', async (req, reply) => {
         return user;
     } catch (e) {
         return reply.code(500).send({ error: 'Failed to update status' });
+    }
+});
+
+// --- Ignore Triggers ---
+
+fastify.get('/triggers', async (req, reply) => {
+    try {
+        const triggers = await prisma.ignoreTrigger.findMany({ orderBy: { createdAt: 'desc' } });
+        return triggers;
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to fetch triggers' });
+    }
+});
+
+fastify.post('/triggers', async (req, reply) => {
+    const { keyword, type } = req.body as { keyword: string, type?: string };
+    if (!keyword) return reply.code(400).send({ error: 'Keyword is required' });
+
+    try {
+        const trigger = await prisma.ignoreTrigger.create({
+            data: {
+                keyword: keyword.toLowerCase().trim(),
+                type: type || 'KEYWORD'
+            }
+        });
+        return trigger;
+    } catch (e: any) {
+        // Unique constraint violation
+        if (e.code === 'P2002') {
+            return reply.code(400).send({ error: 'Trigger already exists' });
+        }
+        return reply.code(500).send({ error: 'Failed to create trigger' });
+    }
+});
+
+fastify.delete('/triggers/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        await prisma.ignoreTrigger.delete({ where: { id: Number(id) } });
+        return { success: true };
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to delete trigger' });
     }
 });
 

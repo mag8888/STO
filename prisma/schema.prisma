@@ -156,3 +156,10 @@ model Rule {
   user      User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 }
+
+model IgnoreTrigger {
+  id        Int      @id @default(autoincrement())
+  keyword   String   @unique
+  type      String   @default("KEYWORD") // KEYWORD, USERNAME, PHONE
+  createdAt DateTime @default(now())
+}
