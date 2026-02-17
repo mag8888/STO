@@ -635,7 +635,8 @@
             // 2. Filter by Type
             if (currentFilter !== 'ALL') {
                 list = list.filter(d => {
-                    const isScout = d.user && (d.user.sourceChatId || d.source === 'SCOUT');
+                    // Check source field first, then fallback to sourceChatId
+                    const isScout = d.source === 'SCOUT' || (d.user && d.user.sourceChatId);
                     if (currentFilter === 'SCOUT') return isScout;
                     if (currentFilter === 'INBOUND') return !isScout;
                     return true;
@@ -661,7 +662,7 @@
 
                 // Source Badge
                 let sourceBadge = '';
-                const isScout = d.user && d.user.sourceChatId;
+                const isScout = d.source === 'SCOUT' || (d.user && d.user.sourceChatId);
                 if (isScout) {
                     sourceBadge = '<span class="badge" style="background:#8e44ad;">SCOUT</span>';
                 } else {
