@@ -118,6 +118,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
 
             {/* Input */}
             <div className="p-4 border-t border-border bg-card">
+                {/* AI Tools Toolbar */}
+                <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                    <button
+                        onClick={() => actions.regenerateResponse(dialogue.id)}
+                        className="text-xs bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors whitespace-nowrap"
+                        title="Force AI to generate a reply"
+                    >
+                        ✨ Generate Reply
+                    </button>
+                    <button
+                        onClick={() => {
+                            const instructions = prompt("Custom instructions for AI:");
+                            if (instructions) actions.regenerateResponse(dialogue.id, instructions);
+                        }}
+                        className="text-xs bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500/20 px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors whitespace-nowrap"
+                        title="Generate with instructions"
+                    >
+                        🪄 Generate with Hint...
+                    </button>
+                </div>
+
                 <div className="flex gap-2">
                     <input
                         className="flex-1 bg-muted rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"

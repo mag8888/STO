@@ -57,8 +57,12 @@ export const approveMessage = async (messageId: number, updatedText?: string) =>
     return response.data;
 };
 
-export const createDraft = async (_: number, __: string) => {
-    // We need an endpoint for this if we want manual drafting
-    // For now, assume it's done via other means or add endpoint
-    // return api.post(`/dialogues/${dialogueId}/draft`, { text });
+export const regenerateResponse = async (dialogueId: number, instructions?: string) => {
+    const response = await api.post(`/dialogues/${dialogueId}/regenerate`, { instructions });
+    return response.data;
+};
+
+export const getTemplates = async () => {
+    const response = await api.get<{ id: number; name: string; content: string }[]>('/templates');
+    return response.data;
 };

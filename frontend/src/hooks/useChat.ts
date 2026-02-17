@@ -163,6 +163,23 @@ export const useChat = () => {
         }
     };
 
+    const regenerateResponse = async (dialogueId: number, instructions?: string) => {
+        try {
+            setLoading(true);
+            await fetch(`/dialogues/${dialogueId}/regenerate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instructions })
+            });
+            await selectChat(dialogueId);
+        } catch (e) {
+            console.error(e);
+            alert('Failed to regenerate response');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return {
         dialogues: filteredDialogues,
         currentDialogue,
@@ -179,6 +196,7 @@ export const useChat = () => {
         setSearch,
         loading,
         showRejected,
-        setShowRejected
+        setShowRejected,
+        regenerateResponse,
     };
 };
