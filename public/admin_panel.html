@@ -1113,30 +1113,44 @@
 
         async function refreshLoginStatus() {
             const statusText = document.getElementById('login-status-text');
-            statusText.textContent = 'Refreshing QR...';
+            const img = document.getElementById('qr-code-img');
+
+            // Only update text if we're not already connected/polling successfully
+            if (statusText.textContent !== 'Scan QR Code to Login') {
+                statusText.textContent = 'Checking status...';
+            }
 
             try {
                 const res = await fetch('/login-qr');
-                if (res.ok) {
+
+                // Content-Type check to handle Image vs JSON
+                const contentType = res.headers.get("content-type");
+
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    const data = await res.json();
+                    if (data.status === 'connected') {
+                        statusText.textContent = "✅ Connected & Authorized!";
+                        statusText.className = "text-success"; // Assuming you have utility classes or styling
+                        img.style.display = 'none';
+                        if (qrInterval) clearInterval(qrInterval);
+                        checkSystemStatus(); // Refresh global status
+                    } else if (data.error) {
+                        statusText.textContent = `Status: ${data.error}`;
+                        if (res.status === 503) statusText.textContent = "Initializing client...";
+                    }
+                } else if (res.ok) {
+                    // It's an image
                     const blob = await res.blob();
                     const url = URL.createObjectURL(blob);
-                    const img = document.getElementById('qr-code-img');
                     img.src = url;
                     img.style.display = 'block';
                     statusText.textContent = 'Scan QR Code to Login';
                 } else {
-                    const err = await res.json();
-                    statusText.textContent = `Status: ${err.error || res.statusText}`;
-                    if (res.status === 503) {
-                        alert("Client is initializing. Please wait 10 seconds and try again.");
-                    } else if (res.status === 400) {
-                        alert("You are already logged in!");
-                        checkSystemStatus();
-                    }
+                    statusText.textContent = 'Error loading QR';
                 }
             } catch (e) {
-                statusText.textContent = 'Error fetching QR';
-                console.error(e);
+                console.error("QR Error", e);
+                statusText.textContent = 'Connection error';
             }
         }
 
