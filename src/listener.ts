@@ -117,10 +117,16 @@ export async function startListener(page: any) { // 'page' arg kept for compatib
             // Update Profile Data
             if (gptResult.extractedProfile && Object.keys(gptResult.extractedProfile).length > 0) {
                 console.log(`[Profile] Updating user ${user.username}:`, gptResult.extractedProfile);
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: gptResult.extractedProfile
-                });
+
+                // Strip system fields that cannot be updated directly
+                const { id, createdAt, updatedAt, ...profileData } = gptResult.extractedProfile as any;
+
+                if (Object.keys(profileData).length > 0) {
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: profileData
+                    });
+                }
             }
 
             // Update State

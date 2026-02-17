@@ -86,28 +86,26 @@ INSTRUCTIONS:
 - If the user asks a question, answer it using the KB below or common sense.
 - ALWAYS extract any new profile data from the user's last message into the JSON output.
 - **IMPORTANT**: If the user provides a "Business Card" or long bio, try to EXTRACT as many fields as possible (City, Activity, Income, etc.) from it immediately.
-`;
-
 RELEVANT KNOWLEDGE BASE:
-${ kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n') }
+${kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n')}
 
 PERMANENT RULES:
-${ rules.join('\n') }
+${rules.join('\n')}
 
-${ instructions ? `\nCUSTOM INSTRUCTIONS:\n${instructions}` : '' }
+${instructions ? `\nCUSTOM INSTRUCTIONS:\n${instructions}` : ''}
 
 OUTPUT FORMAT(JSON):
-    {
-        "reply": "Your extracted reply",
-            "extractedProfile": {
-            "city": "Paris",
-                "activity": "Marketing",
+{
+  "reply": "Your extracted reply",
+  "extractedProfile": {
+      "city": "Paris",
+      "activity": "Marketing",
       ... (only fields found in the LAST message)
-        },
-        "nextStage": "${stage}",
-            "newFacts": { ... }
-    }
-    `;
+  },
+  "nextStage": "${stage}",
+  "newFacts": { ... }
+}
+`;
 
     try {
         const messages: any[] = [

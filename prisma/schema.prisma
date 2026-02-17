@@ -173,6 +173,7 @@ model Rule {
 model IgnoreTrigger {
   id        Int      @id @default(autoincrement())
   keyword   String   @unique
+  type      String   @default("KEYWORD") // KEYWORD, USERNAME, PHONE
   createdAt DateTime @default(now())
 }
 
