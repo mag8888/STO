@@ -143,7 +143,10 @@ const Sidebar: React.FC<SidebarProps> = ({ chatState }) => {
                     
                     Let's assume we want a visual indicator. 
                 */}
-                <StatusIndicator />
+                <div className="flex justify-between items-center mb-2">
+                    <StatusIndicator />
+                    <span className="text-[10px] text-muted-foreground opacity-50">v1.1</span>
+                </div>
             </div>
         </div>
     );
