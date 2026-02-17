@@ -602,20 +602,22 @@ fastify.post('/sync-chats', async (req, reply) => {
 
     try {
         const { limit } = req.body as { limit?: number } || {};
-        // Fetch dialogs from Telegram
-        const dialogs = await client.getDialogs({ limit: limit || 20 });
+        // Increase default limit to catch personal chats buried under spam
+        const dialogs = await client.getDialogs({ limit: limit || 100 });
         let count = 0;
 
         for (const d of dialogs) {
-            // We only want private chats (users), not groups/channels for now
+            // We only want private chats (users)
             if (!d.isUser) continue;
 
             const entity = d.entity as any;
             const telegramId = entity.id.toString();
+            // Check if it's a mutual contact or contact
+            const isContact = entity.contact || entity.mutualContact;
+
             const username = entity.username || null;
             const firstName = entity.firstName || null;
             const lastName = entity.lastName || null;
-            const title = d.title || 'Unknown';
 
             // 1. Upsert User
             const user = await prisma.user.upsert({
@@ -624,19 +626,17 @@ fastify.post('/sync-chats', async (req, reply) => {
                     username,
                     firstName,
                     lastName,
-                    // Don't overwrite status if it exists, unless it's null? No, keep existing status.
                 },
                 create: {
                     telegramId,
                     username,
                     firstName,
                     lastName,
-                    status: 'NEW', // Default status for synced chats
+                    status: 'NEW',
                 }
             });
 
             // 2. Upsert Dialogue
-            // Check if dialogue exists
             let dialogue = await prisma.dialogue.findFirst({
                 where: { userId: user.id }
             });
@@ -646,26 +646,34 @@ fastify.post('/sync-chats', async (req, reply) => {
                     data: {
                         userId: user.id,
                         status: 'ACTIVE',
-                        source: 'INBOUND', // Synced chats are considered 'Direct' (Inbound)
+                        // If it's a contact, DEFINITELY Direct. Otherwise default to Inbound.
+                        source: 'INBOUND',
                         stage: 'DISCOVERY'
                     }
                 });
             } else {
-                // Ensure source is INBOUND if it was somehow SCOUT (unlikely for personal chats but good safety)
-                // Actually, let's leave it. If we Scouted them, they are SCOUT.
+                // Fix: If it IS a contact, ensure it is INBOUND (Direct)
+                // This helps fix the "Bulk Move" issue where contacts were moved to Scout
+                if (isContact && dialogue.source === 'SCOUT') {
+                    await prisma.dialogue.update({
+                        where: { id: dialogue.id },
+                        data: { source: 'INBOUND' }
+                    });
+                }
             }
-
-            // Optional: Sync last message?
-            // For now, just ensuring the user/dialogue exists is enough to show them in the list.
-
             count++;
         }
-
-        return { success: true, count, message: `Synced ${count} chats` };
+        return { success: true, count };
     } catch (e: any) {
-        req.log.error(e);
-        return reply.code(500).send({ error: 'Sync failed', details: e.message });
+
+        count++;
     }
+
+    return { success: true, count, message: `Synced ${count} chats` };
+} catch (e: any) {
+    req.log.error(e);
+    return reply.code(500).send({ error: 'Sync failed', details: e.message });
+}
 });
 
 fastify.post('/users/:id/status', async (req, reply) => {
