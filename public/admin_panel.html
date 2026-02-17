@@ -138,9 +138,13 @@
         <!-- Inbox View -->
         <div id="inbox-view">
             <div class="chat-list-panel">
-                <div class="chat-list-header">
+                <div class="chat-list-header" style="display:flex; gap:0.5rem;">
                     <input type="text" class="search-input" placeholder="Search chats..." id="chat-search"
-                        onkeyup="renderChatList(dialogues)">
+                        onkeyup="renderChatList(dialogues)" style="flex:1;">
+                    <button class="btn btn-secondary" onclick="syncChats()" title="Sync Telegram Chats"
+                        style="padding:0.5rem;">
+                        <ion-icon name="sync-outline"></ion-icon>
+                    </button>
                 </div>
                 <!-- Filter Tabs -->
                 <div
@@ -541,7 +545,38 @@
             }
         }
 
+        async function syncChats() {
+            const btn = document.querySelector('button[onclick="syncChats()"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon>';
+            }
+            try {
+                const res = await fetch('/sync-chats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ limit: 20 })
+                });
+                if (res.ok) {
+                    await loadDialogues();
+                } else {
+                    alert('Sync failed');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Sync error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<ion-icon name="sync-outline"></ion-icon>';
+                }
+            }
+        }
+
         function renderChatList(fullList) {
+            console.log('Rendering Chat List. Filter:', currentFilter);
+            console.log('Full List Sample:', fullList.slice(0, 3));
+
             // 1. Filter by Search
             const search = document.getElementById('chat-search').value.toLowerCase();
             let list = fullList.filter(d => {
