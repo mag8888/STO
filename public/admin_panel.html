@@ -33,6 +33,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link" onclick="switchView('direct')">
+                    <ion-icon name="chatbox-ellipses-outline"></ion-icon> Direct
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" onclick="switchView('leads')">
                     <ion-icon name="people-outline"></ion-icon> Leads
                 </a>
@@ -57,11 +62,7 @@
                     <ion-icon name="document-text-outline"></ion-icon> Templates
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link" onclick="switchView('direct')">
-                    <ion-icon name="chatbox-ellipses-outline"></ion-icon> Direct
-                </a>
-            </li>
+
             <li class="nav-item">
                 <a class="nav-link" onclick="switchView('settings')">
                     <ion-icon name="settings-outline"></ion-icon> Settings
@@ -427,14 +428,38 @@
                 if (el.id === 'inbox-view') el.style.display = 'none';
             });
 
+            // Handle Direct View (Reuses Inbox)
+            if (viewId === 'direct') {
+                const inbox = document.getElementById('inbox-view');
+                inbox.style.display = 'flex';
+                inbox.classList.add('active');
+                // Force filter
+                setFilter('INBOUND');
+                loadDialogues();
+
+                // Update Nav link
+                document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+                document.querySelector(`.nav-link[onclick="switchView('${viewId}')"]`).classList.add('active');
+                return;
+            }
+
             // Show selected view
             const target = document.getElementById(viewId + '-view');
+            if (!target) return; // Safety check
+
             if (viewId === 'inbox') {
                 target.style.display = 'flex';
-                // Reload dialogues when entering inbox
+                setFilter('ALL'); // Default to ALL for inbox
                 loadDialogues();
+            } else {
+                target.style.display = 'block';
             }
+
             target.classList.add('active');
+
+            // Rules/Triggers loaders
+            if (viewId === 'rules') loadRules();
+            if (viewId === 'triggers') loadTriggers();
 
             // Update Nav link
             document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
@@ -528,8 +553,9 @@
             // 2. Filter by Type
             if (currentFilter !== 'ALL') {
                 list = list.filter(d => {
-                    if (currentFilter === 'SCOUT') return d.source === 'SCOUT';
-                    if (currentFilter === 'INBOUND') return d.source !== 'SCOUT'; // Assume anything not SCOUT is INBOUND/Direct
+                    const isScout = d.user && (d.user.sourceChatId || d.source === 'SCOUT');
+                    if (currentFilter === 'SCOUT') return isScout;
+                    if (currentFilter === 'INBOUND') return !isScout;
                     return true;
                 });
             }
@@ -553,10 +579,11 @@
 
                 // Source Badge
                 let sourceBadge = '';
-                if (d.source === 'SCOUT') {
+                const isScout = d.user && d.user.sourceChatId;
+                if (isScout) {
                     sourceBadge = '<span class="badge" style="background:#8e44ad;">SCOUT</span>';
                 } else {
-                    sourceBadge = '<span class="badge" style="background:#2ecc71;">INBOUND</span>';
+                    sourceBadge = '<span class="badge" style="background:#2ecc71;">DIRECT</span>';
                 }
 
                 div.innerHTML = `
