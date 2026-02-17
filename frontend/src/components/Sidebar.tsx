@@ -92,7 +92,11 @@ const Sidebar: React.FC<SidebarProps> = ({ chatState }) => {
                     return (
                         <div
                             key={d.id}
-                            onClick={() => selectChat(d.id)}
+                            onClick={() => {
+                                console.log('Clicked chat', d.id);
+                                // alert(`Clicked chat ${d.id}`); // Temporary debug
+                                selectChat(d.id);
+                            }}
                             className={`p-3 border-b border-border/50 cursor-pointer transition-colors hover:bg-muted/50 ${isActive ? 'bg-muted border-l-4 border-l-primary' : ''
                                 }`}
                         >

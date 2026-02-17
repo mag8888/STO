@@ -76,18 +76,23 @@ export const useChat = () => {
     });
 
     const selectChat = async (id: number) => {
+        console.log('[DEBUG] selectChat called for ID:', id);
         // 1. Optimistic update (show partial data immediately)
         const partial = dialogues.find(d => d.id === id);
-        if (partial) setCurrentDialogue(partial);
+        if (partial) {
+            console.log('[DEBUG] Found partial dialogue:', partial.id);
+            setCurrentDialogue(partial);
+        }
 
         try {
             setLoading(true);
             const res = await fetch(`/dialogues/${id}`);
             if (!res.ok) throw new Error('Failed to fetch chat details');
             const fullDialogue: Dialogue = await res.json();
+            console.log('[DEBUG] Fetched full dialogue:', fullDialogue.id, fullDialogue.messages?.length, 'messages');
             setCurrentDialogue(fullDialogue);
         } catch (e) {
-            console.error(e);
+            console.error('[DEBUG] selectChat error:', e);
         } finally {
             setLoading(false);
         }
