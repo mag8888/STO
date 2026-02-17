@@ -110,6 +110,47 @@ fastify.get('/dialogues', async (req, reply) => {
     }
 });
 
+fastify.post('/dialogues/start', async (req, reply) => {
+    const { username } = req.body as { username: string };
+    if (!username) return reply.code(400).send({ error: 'Username required' });
+
+    try {
+        console.log(`[API] Starting dialogue with @${username}...`);
+        const { user, dialogue } = await ensureUserAndDialogue(username, username, undefined, 'INBOUND');
+
+        // Reset stage if needed
+        if (dialogue.stage === 'CLOSED') {
+            await prisma.dialogue.update({
+                where: { id: dialogue.id },
+                data: { stage: 'DISCOVERY', status: 'ACTIVE' }
+            });
+        }
+
+        // Generate First Message
+        const history: any[] = []; // Empty history for start
+        const facts = (user.facts as any) || {};
+
+        const gptResult = await generateResponse(
+            history,
+            'DISCOVERY', // Force Discovery stage
+            user,
+            {},
+            []
+        );
+
+        if (gptResult) {
+            await createDraftMessage(dialogue.id, gptResult.reply);
+            return { success: true, dialogueId: dialogue.id, reply: gptResult.reply };
+        } else {
+            return reply.code(500).send({ error: 'Failed to generate initial message' });
+        }
+
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: e.message });
+    }
+});
+
 fastify.post('/dialogues/:id/source', async (req, reply) => {
     const { id } = req.params as { id: string };
     const { source } = req.body as { source: 'INBOUND' | 'SCOUT' };
