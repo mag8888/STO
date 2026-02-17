@@ -65,9 +65,7 @@ try {
 }
 
 // Route root to index.html
-fastify.get('/', (req, reply) => {
-    reply.sendFile('index.html');
-});
+
 
 // Fallback for SPA routing (optional, simplistic)
 // fastify.setNotFoundHandler((req, reply) => {
