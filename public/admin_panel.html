@@ -158,6 +158,13 @@
                         +
                     </button>
                 </div>
+                <div style="padding: 0 1rem 0.5rem 1rem; display:flex; gap:0.5rem; align-items:center;">
+                    <label
+                        style="font-size:0.75rem; color:var(--text-secondary); display:flex; align-items:center; gap:0.3rem; cursor:pointer;">
+                        <input type="checkbox" id="show-rejected"
+                            onchange="if(typeof dialogues !== 'undefined') renderChatList(dialogues)"> Show Rejected
+                    </label>
+                </div>
                 <!-- Filter Tabs -->
                 <div
                     style="display:flex; gap:0.5rem; padding:0.5rem 1rem; border-bottom:1px solid var(--border); background:var(--bg-card);">
@@ -635,8 +642,14 @@
             console.log('Full List Sample:', fullList.slice(0, 3));
 
             // 1. Filter by Search
+            // 1. Filter by Search
             const search = document.getElementById('chat-search').value.toLowerCase();
+            const showRejected = document.getElementById('show-rejected') ? document.getElementById('show-rejected').checked : false;
+
             let list = fullList.filter(d => {
+                // Filter Rejected
+                if (!showRejected && d.user.status === 'REJECTED') return false;
+
                 const name = (d.user.firstName || '') + ' ' + (d.user.lastName || '');
                 const username = d.user.username || '';
                 return name.toLowerCase().includes(search) || username.toLowerCase().includes(search);
@@ -1458,6 +1471,9 @@
                         }
                     }
                 }
+
+                // Refresh list to remove rejected item if filter is active
+                renderChatList(dialogues);
 
                 // Refresh list to update badges
                 renderChatList(dialogues);
