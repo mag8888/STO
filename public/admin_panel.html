@@ -1415,6 +1415,13 @@
             if (navLink) navLink.classList.add('active');
         };
 
+        // --- Auth Logic ---
+        function startAuthFlow() {
+            // Trigger QR code refresh and show modal/section
+            // In this UI, we just refresh the status area
+            refreshLoginStatus();
+        }
+
     </script>
 
     <!-- Prompt Modal -->
