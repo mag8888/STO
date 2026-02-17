@@ -675,11 +675,17 @@ fastify.post('/sync-chats', async (req, reply) => {
             // If it's a contact or direct chat, and has NO messages, fetch history so it's not empty.
             if (isContact || dialogue.source === 'INBOUND') {
                 const msgCount = await prisma.message.count({ where: { dialogueId: dialogue.id } });
+                console.log(`[Sync] Checking ${username} (ID: ${telegramId}). isContact: ${isContact}, Source: ${dialogue.source}, Msgs: ${msgCount}`);
+
                 if (msgCount === 0) {
                     try {
-                        const history = await client.getMessages(entity, { limit: 10 });
+                        console.log(`[Sync] Fetching history for ${username}...`);
+                        const history = await client.getMessages(entity, { limit: 20 }); // Increased to 20
+                        console.log(`[Sync] Fetched ${history.length} messages.`);
+
+                        let imported = 0;
                         for (const msg of history) {
-                            if (!msg.message) continue; // Skip empty (media only?)
+                            if (!msg.message) continue;
 
                             // Determine sender
                             // If out=true, it's Me (Operator/Simulator). If false, it's User.
@@ -694,14 +700,16 @@ fastify.post('/sync-chats', async (req, reply) => {
                                     createdAt: new Date(msg.date * 1000)
                                 }
                             });
+                            imported++;
                         }
+                        if (imported > 0) count++; // Count this as an update
                     } catch (e) {
                         console.error(`Failed to sync history for ${username}:`, e);
                     }
                 }
+            } else {
+                console.log(`[Sync] Skipping message sync for ${username} (Not Contact/Inbound)`);
             }
-
-            count++;
         }
         return {
             success: true,
