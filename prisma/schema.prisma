@@ -33,6 +33,7 @@ model User {
   // Profile Fields (Networking Assistant)
   city            String?
   activity        String?  // Sphere of activity
+  businessCard    String?  // Raw text of business card/bio
   bestClients     String?  // Description of best clients
   requests        String?  // Common requests/tasks
   hobbies         String?

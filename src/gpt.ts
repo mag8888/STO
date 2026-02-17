@@ -14,6 +14,7 @@ export interface GPTResponse {
 
 // Profile fields we want to collect in order
 const PROFILE_FIELDS = [
+    { key: 'businessCard', question: 'Возможно, у вас есть ваше описание в формате визитки? (так мы лучше подберем собеседников)' },
     { key: 'activity', question: 'Чем занимаетесь? (какая сфера)' },
     { key: 'city', question: 'Из какого вы города?' },
     { key: 'bestClients', question: 'Расскажите о трех ваших лучших клиентах, чтобы мы смогли подобрать вам оптимальных людей.' },
@@ -73,6 +74,7 @@ INSTRUCTIONS:
 - Mirroring Example: "Got it, you help entrepreneurs scale. Cool. And what city are you in?"
 - If the user asks a question, answer it using the KB below or common sense.
 - ALWAYS extract any new profile data from the user's last message into the JSON output.
+- **IMPORTANT**: If the user provides a "Business Card" or long bio, try to EXTRACT as many fields as possible (City, Activity, Income, etc.) from it immediately.
 
 RELEVANT KNOWLEDGE BASE:
 ${kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n')}
