@@ -128,7 +128,21 @@
         <div id="inbox-view">
             <div class="chat-list-panel">
                 <div class="chat-list-header">
-                    <input type="text" class="search-input" placeholder="Search chats..." id="chat-search">
+                    <input type="text" class="search-input" placeholder="Search chats..." id="chat-search"
+                        onkeyup="renderChatList(dialogues)">
+                </div>
+                <!-- Filter Tabs -->
+                <div
+                    style="display:flex; gap:0.5rem; padding:0.5rem 1rem; border-bottom:1px solid var(--border); background:var(--bg-card);">
+                    <div id="tab-all" class="filter-tab active" onclick="setFilter('ALL')"
+                        style="flex:1; padding:0.3rem; text-align:center; border-radius:0.4rem; font-size:0.75rem; cursor:pointer; background:var(--primary); color:white;">
+                        All</div>
+                    <div id="tab-inbound" class="filter-tab" onclick="setFilter('INBOUND')"
+                        style="flex:1; padding:0.3rem; text-align:center; border-radius:0.4rem; font-size:0.75rem; cursor:pointer; background:var(--bg-body); border:1px solid var(--border); color:var(--text-secondary);">
+                        Direct</div>
+                    <div id="tab-scout" class="filter-tab" onclick="setFilter('SCOUT')"
+                        style="flex:1; padding:0.3rem; text-align:center; border-radius:0.4rem; font-size:0.75rem; cursor:pointer; background:var(--bg-body); border:1px solid var(--border); color:var(--text-secondary);">
+                        Scout</div>
                 </div>
                 <div class="chat-items" id="chat-list">
                     <!-- Chat Items Injected Here -->
@@ -418,6 +432,30 @@
         }
 
         // --- Inbox Logic ---
+        let currentFilter = 'ALL';
+
+        function setFilter(type) {
+            currentFilter = type;
+
+            // Update UI
+            document.querySelectorAll('.filter-tab').forEach(el => {
+                el.style.background = 'var(--bg-body)';
+                el.style.color = 'var(--text-secondary)';
+                el.style.borderColor = 'var(--border)';
+                el.classList.remove('active');
+            });
+
+            const activeTab = document.getElementById(type === 'ALL' ? 'tab-all' : (type === 'SCOUT' ? 'tab-scout' : 'tab-inbound'));
+            if (activeTab) {
+                activeTab.style.background = 'var(--primary)';
+                activeTab.style.color = 'white';
+                activeTab.style.borderColor = 'var(--primary)';
+                activeTab.classList.add('active');
+            }
+
+            renderChatList(dialogues);
+        }
+
         async function loadDialogues() {
             try {
                 const res = await fetch('/dialogues');
@@ -429,7 +467,23 @@
             }
         }
 
-        function renderChatList(list) {
+        function renderChatList(fullList) {
+            // 1. Filter by Search
+            const search = document.getElementById('chat-search').value.toLowerCase();
+            let list = fullList.filter(d => {
+                const name = (d.user.firstName || '') + ' ' + (d.user.lastName || '');
+                const username = d.user.username || '';
+                return name.toLowerCase().includes(search) || username.toLowerCase().includes(search);
+            });
+
+            // 2. Filter by Type
+            if (currentFilter !== 'ALL') {
+                list = list.filter(d => {
+                    if (currentFilter === 'SCOUT') return d.source === 'SCOUT';
+                    if (currentFilter === 'INBOUND') return d.source !== 'SCOUT'; // Assume anything not SCOUT is INBOUND/Direct
+                    return true;
+                });
+            }
             const container = document.getElementById('chat-list');
             container.innerHTML = '';
             list.forEach(d => {
