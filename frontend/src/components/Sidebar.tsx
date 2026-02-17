@@ -172,8 +172,13 @@ const StatusIndicator = () => {
     const handleReconnect = async () => {
         if (showQr) { setShowQr(false); return; }
 
-        // 1. Trigger Reconnect
-        // await fetch('/reconnect', { method: 'POST' });
+        // 1. Trigger Reconnect (Force server to restart client)
+        try {
+            await fetch('/reconnect', { method: 'POST' });
+        } catch (e) { console.error('Reconnect request failed', e); }
+
+        // Wait a bit for QR to generate
+        await new Promise(r => setTimeout(r, 2000));
 
         // 2. Fetch QR
         setShowQr(true);
