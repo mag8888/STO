@@ -663,17 +663,12 @@ fastify.post('/sync-chats', async (req, reply) => {
             }
             count++;
         }
-        return { success: true, count };
+        return { success: true, count, message: `Synced ${count} chats` };
     } catch (e: any) {
-
-        count++;
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Sync failed', details: e.message });
     }
-
-    return { success: true, count, message: `Synced ${count} chats` };
-} catch (e: any) {
-    req.log.error(e);
-    return reply.code(500).send({ error: 'Sync failed', details: e.message });
-}
+});
 });
 
 fastify.post('/users/:id/status', async (req, reply) => {
