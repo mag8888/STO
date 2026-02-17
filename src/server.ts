@@ -307,39 +307,41 @@ fastify.get('/login-qr', async (req, reply) => {
                 return reply.send({ status: 'connected', message: 'Client is already connected and authorized! No QR needed.' });
             }
         }
-        // If connected but not authorized, and Token is null...
-        // It means we might be waiting for QR generation callback?
-        return reply.code(404).send({ error: 'QR code not generated yet. Please wait a few seconds and try again.' });
-    }
+
+        // If we are here, we need a QR code.
+        // If token is missing, we can't generate it.
+        if (!token) {
+            return reply.code(404).send({ error: 'QR code not generated yet. Please wait a few seconds and try again.' });
+        }
 
         const QRCode = require('qrcode');
 
-    // Convert to Base64URL (RFC 4648)
-    // 1. Convert to standard Base64
-    // 2. Replace "+" with "-"
-    // 3. Replace "/" with "_"
-    // 4. Remove padding "="
-    const tokenBase64 = token.toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+        // Convert to Base64URL (RFC 4648)
+        // 1. Convert to standard Base64
+        // 2. Replace "+" with "-"
+        // 3. Replace "/" with "_"
+        // 4. Remove padding "="
+        const tokenBase64 = token.toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
 
-    const url = `tg://login?token=${tokenBase64}`;
+        const url = `tg://login?token=${tokenBase64}`;
 
-    console.log(`[DEBUG] QR Code URL: ${url}`);
+        console.log(`[DEBUG] QR Code URL: ${url}`);
 
-    const buffer = await QRCode.toBuffer(url, {
-        scale: 10,
-        margin: 4, // Increased margin for better scanning
-        errorCorrectionLevel: 'Q' // Higher error correction (L, M, Q, H)
-    });
+        const buffer = await QRCode.toBuffer(url, {
+            scale: 10,
+            margin: 4, // Increased margin for better scanning
+            errorCorrectionLevel: 'Q' // Higher error correction (L, M, Q, H)
+        });
 
-    reply.type('image/png');
-    return buffer;
-} catch (e: any) {
-    req.log.error(e);
-    return reply.code(500).send({ error: 'Failed to generate QR', details: e.message });
-}
+        reply.type('image/png');
+        return buffer;
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to generate QR', details: e.message });
+    }
 });
 
 fastify.post('/scan-chat', async (req, reply) => {
