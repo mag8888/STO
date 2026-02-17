@@ -50,15 +50,26 @@ fastify.get('/logs', async (req, reply) => {
 // });
 
 // Serve static files from public directory
+// Serve React Frontend (Built)
 fastify.register(fastifyStatic, {
-    root: path.join(__dirname, '../public'),
+    root: path.join(__dirname, '../frontend/dist'),
     prefix: '/',
+    wildcard: false // Disable wildcard to allow API routes and manual SPA handling if needed
 });
 
-// Route root to admin_panel
+// Route root to index.html
 fastify.get('/', (req, reply) => {
-    reply.sendFile('admin_panel.html');
+    reply.sendFile('index.html');
 });
+
+// Fallback for SPA routing (optional, simplistic)
+// fastify.setNotFoundHandler((req, reply) => {
+//     if (!req.raw.url?.startsWith('/api')) {
+//         reply.sendFile('index.html');
+//     } else {
+//         reply.code(404).send({ error: 'Not Found' });
+//     }
+// });
 
 // API Routes
 
