@@ -133,20 +133,19 @@ const Sidebar: React.FC<SidebarProps> = ({ chatState }) => {
                     </div>
                 )}
             </div>
-        </div>
 
-            {/* Connection Status Footer */ }
-    <div className="p-3 border-t border-border bg-muted/30 text-xs">
-        {/* We need a way to check status. Ideally passed via props or separate hook. 
+            {/* Connection Status Footer */}
+            <div className="p-3 border-t border-border bg-muted/30 text-xs">
+                {/* We need a way to check status. Ideally passed via props or separate hook. 
                     For now, I'll add a simple local poll or just a visual indicator if I can get state. 
                     Actually, let's just add a Reconnect button that always appears for now if we want to force it. 
                     Better: Use the useChat loading state or add a specific status hook.
                     
                     Let's assume we want a visual indicator. 
                 */}
-        <StatusIndicator />
-    </div>
-        </div >
+                <StatusIndicator />
+            </div>
+        </div>
     );
 };
 
