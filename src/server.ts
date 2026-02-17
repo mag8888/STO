@@ -670,6 +670,38 @@ fastify.post('/sync-chats', async (req, reply) => {
                     count++; // Count updates too so user knows something happened
                 }
             }
+
+            // --- Feature: Sync Message History for Contacts ---
+            // If it's a contact or direct chat, and has NO messages, fetch history so it's not empty.
+            if (isContact || dialogue.source === 'INBOUND') {
+                const msgCount = await prisma.message.count({ where: { dialogueId: dialogue.id } });
+                if (msgCount === 0) {
+                    try {
+                        const history = await client.getMessages(entity, { limit: 10 });
+                        for (const msg of history) {
+                            if (!msg.message) continue; // Skip empty (media only?)
+
+                            // Determine sender
+                            // If out=true, it's Me (Operator/Simulator). If false, it's User.
+                            const sender = msg.out ? 'OPERATOR' : 'USER';
+
+                            await prisma.message.create({
+                                data: {
+                                    dialogueId: dialogue.id,
+                                    text: msg.message,
+                                    sender: sender,
+                                    status: 'SENT',
+                                    createdAt: new Date(msg.date * 1000)
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.error(`Failed to sync history for ${username}:`, e);
+                    }
+                }
+            }
+
+            count++;
         }
         return {
             success: true,
