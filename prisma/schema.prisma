@@ -116,6 +116,8 @@ enum UserStatus {
   REJECTED
   MATCHED
   BLOCKED
+  CUSTOMER
+  BLOCKED
 }
 
 enum DialogueStatus {

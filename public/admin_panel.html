@@ -58,6 +58,11 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link" onclick="switchView('direct')">
+                    <ion-icon name="chatbox-ellipses-outline"></ion-icon> Direct
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" onclick="switchView('settings')">
                     <ion-icon name="settings-outline"></ion-icon> Settings
                 </a>
@@ -744,6 +749,7 @@
             let statusText = '';
             if (user.status === 'LEAD') statusText = '🔥 Lead';
             if (user.status === 'REJECTED') statusText = '🚫 Rejected';
+            if (user.status === 'BLOCKED') statusText = '⛔ Blocked';
             statusEl.textContent = statusText;
             statusEl.style.display = statusText ? 'block' : 'none';
 
@@ -1238,15 +1244,78 @@
             });
         }
 
-        async function blockUser(userId) {
-            // Instant block, no confirmation
+        async function updateUserStatus(newStatus) {
+            if (!currentDialogueId) return;
+            const d = dialogues.find(d => d.id === currentDialogueId);
+            if (!d || !d.user) return;
+
+            const userId = d.user.id;
+            const originalStatus = d.user.status;
+
+            // Optimistic Update
+            d.user.status = newStatus;
+            renderChatHeader(d);
+
             try {
+                // 1. Update Status
+                const res = await fetch(`/users/${userId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                if (!res.ok) throw new Error('Failed to update status');
+
+                // 2. Auto-Ignore if Rejected
+                if (newStatus === 'REJECTED') {
+                    if (d.user.username) {
+                        await fetch('/triggers', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ keyword: d.user.username, type: 'USERNAME' })
+                        });
+                        console.log('Auto-ignored rejected user:', d.user.username);
+                        if (document.getElementById('triggers-view').style.display === 'block') {
+                            loadTriggers();
+                        }
+                    }
+                }
+
+                // Refresh list to update badges
+                renderChatList(dialogues);
+
+            } catch (e) {
+                console.error("Status update error", e);
+                alert('Failed to update status');
+                d.user.status = originalStatus; // Revert
+                renderChatHeader(d);
+            }
+        }
+
+        async function blockUser(userId) {
+            try {
+                // 1. Block user
                 await fetch(`/users/${userId}/block`, { method: 'POST' });
-                // alert('User blocked'); // Removed by request
-                // Optional: Archive chat automatically
+
+                // 2. Add to Ignore Triggers (Auto-Ignore)
+                // Need to fetch user details first to get username
+                // Or we can rely on `dialogues` array if available
+                const d = dialogues.find(d => d.user.id === userId);
+                if (d && d.user.username) {
+                    await fetch('/triggers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ keyword: d.user.username, type: 'USERNAME' })
+                    });
+                    console.log('Auto-ignored blocked user:', d.user.username);
+                    if (document.getElementById('triggers-view').style.display === 'block') {
+                        loadTriggers();
+                    }
+                }
+
                 if (currentDialogueId) archiveChat(currentDialogueId, true);
             } catch (e) {
-                console.error('Failed to block', e);
+                console.error('Failed to block/ignore', e);
             }
         }
 
@@ -1765,7 +1834,16 @@
                 target.style.display = 'block'; // Default block
                 if (viewId === 'inbox') {
                     target.style.display = 'flex';
+                    setFilter('ALL'); // Default to ALL for inbox
                     loadDialogues();
+                } else if (viewId === 'direct') {
+                    // Reuse inbox view
+                    const inbox = document.getElementById('inbox-view');
+                    inbox.style.display = 'flex';
+                    inbox.classList.add('active');
+                    setFilter('INBOUND'); // Force INBOUND filter
+                    loadDialogues();
+                    target.style.display = 'none'; // Hide the 'direct-view' if it doesn't exist/empty
                 } else if (viewId === 'rules') {
                     loadRules();
                 } else if (viewId === 'triggers') {

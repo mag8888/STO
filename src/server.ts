@@ -247,12 +247,16 @@ fastify.post('/messages/:id/approve', async (request, reply) => {
 
 fastify.put('/users/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { firstName, lastName } = req.body as { firstName?: string, lastName?: string };
+    const { firstName, lastName, status } = req.body as { firstName?: string, lastName?: string, status?: string };
 
     try {
         const user = await prisma.user.update({
             where: { id: parseInt(id) },
-            data: { firstName, lastName }
+            data: {
+                firstName,
+                lastName,
+                status: status as any // Cast to enum if needed
+            }
         });
         return user;
     } catch (e) {
