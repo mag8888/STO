@@ -1559,24 +1559,13 @@
         checkSystemStatus();
 
         // Poll Messages & List
-        setInterval(() => {
-            if (currentDialogueId) {
-                // We need a silent update to not disrupt typing or scrolling if possible, 
-                // but for now simple refresh is valid to show new messages.
-                // To avoid flickering, we might need smarter logic, but let's stick to simple first.
-                // Actually, selectChat triggers full re-render. Ideally we just append. 
-                // But full re-fetch is safer for consistency.
-                const input = document.getElementById('message-input');
-                const isTyping = input && document.activeElement === input;
-
-                // Only refresh if not typing (or handle state better) - actually re-rendering messages area doesn't kill input focus usually if input is outside.
-                // Input is outside messages-area. So it's fine.
-                // But scroll position might jump. 
-                // Let's just do it.
-                selectChat(currentDialogueId);
-            }
-            loadDialogues();
-        }, 3000);
+        // Poll Messages & List - DISABLED mostly to prevent flickering
+        // setInterval(() => {
+        //     if (currentDialogueId) {
+        //         // selectChat(currentDialogueId); // Causes re-render logic issues
+        //     }
+        //     // loadDialogues(); // Causes sidebar flicker
+        // }, 10000);
 
         async function refreshLoginStatus() {
             const statusText = document.getElementById('login-status-text');
