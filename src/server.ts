@@ -602,18 +602,25 @@ fastify.post('/sync-chats', async (req, reply) => {
 
     try {
         const { limit } = req.body as { limit?: number } || {};
-        // Increase default limit to catch personal chats buried under spam
-        const dialogs = await client.getDialogs({ limit: limit || 100 });
+        // Increase default limit to 500 to catch personal chats buried under spam
+        const fetchLimit = limit || 500;
+        const dialogs = await client.getDialogs({ limit: fetchLimit });
+
+        // Debug counters
         let count = 0;
+        let debugUsers = 0;
+        let debugContacts = 0;
 
         for (const d of dialogs) {
             // We only want private chats (users)
             if (!d.isUser) continue;
+            debugUsers++;
 
             const entity = d.entity as any;
             const telegramId = entity.id.toString();
             // Check if it's a mutual contact or contact
-            const isContact = entity.contact || entity.mutualContact;
+            const isContact = entity.contact || entity.mutualContact || false;
+            if (isContact) debugContacts++;
 
             const username = entity.username || null;
             const firstName = entity.firstName || null;
@@ -651,6 +658,7 @@ fastify.post('/sync-chats', async (req, reply) => {
                         stage: 'DISCOVERY'
                     }
                 });
+                count++;
             } else {
                 // Fix: If it IS a contact, ensure it is INBOUND (Direct)
                 // This helps fix the "Bulk Move" issue where contacts were moved to Scout
@@ -659,11 +667,15 @@ fastify.post('/sync-chats', async (req, reply) => {
                         where: { id: dialogue.id },
                         data: { source: 'INBOUND' }
                     });
+                    count++; // Count updates too so user knows something happened
                 }
             }
-            count++;
         }
-        return { success: true, count, message: `Synced ${count} chats` };
+        return {
+            success: true,
+            count,
+            message: `Synced ${count} updates. (Fetched: ${dialogs.length}, Users: ${debugUsers}, Contacts: ${debugContacts})`
+        };
     } catch (e: any) {
         req.log.error(e);
         return reply.code(500).send({ error: 'Sync failed', details: e.message });
