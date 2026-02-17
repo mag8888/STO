@@ -310,26 +310,25 @@ fastify.get('/login-qr', async (req, reply) => {
         }
 
         const QRCode = require('qrcode');
-        // Generate QR code image buffer from the base64 token string (same as qrcode-terminal)
-        // qrcode package takes a string/buffer
-        // Add options for better scannability
 
-        const tokenBase64 = token.toString('base64');
-        const list = [tokenBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')]; // base64url safe?
-        // Actually, standard base64 usually works for the link, but let's check standard.
-        // GramJS qrcode-terminal just does token.toString('base64'). 
-        // But that's for TERMINAL scanner which might just read raw data?
-        // documentation says: tg://login?token=base64encodedtoken
-
-        // Let's try standard base64 first as that's what qrcode-terminal uses.
-        // BUT we must allow the app to recognize it as a TG login.
+        // Convert to Base64URL (RFC 4648)
+        // 1. Convert to standard Base64
+        // 2. Replace "+" with "-"
+        // 3. Replace "/" with "_"
+        // 4. Remove padding "="
+        const tokenBase64 = token.toString('base64')
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
 
         const url = `tg://login?token=${tokenBase64}`;
 
+        console.log(`[DEBUG] QR Code URL: ${url}`);
+
         const buffer = await QRCode.toBuffer(url, {
             scale: 10,
-            margin: 2,
-            errorCorrectionLevel: 'L' // Lower error correction = less dense QR = easier to scan
+            margin: 4, // Increased margin for better scanning
+            errorCorrectionLevel: 'Q' // Higher error correction (L, M, Q, H)
         });
 
         reply.type('image/png');
