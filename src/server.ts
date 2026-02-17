@@ -851,13 +851,6 @@ const start = async () => {
         process.exit(1);
     }
 };
-startListener(null);
-        }
 
-    } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-}
-};
 
 start();
