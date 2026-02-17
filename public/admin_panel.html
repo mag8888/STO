@@ -612,9 +612,12 @@
                     body: JSON.stringify({ limit: 20 })
                 });
                 if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message || 'Sync complete');
                     await loadDialogues();
                 } else {
-                    alert('Sync failed');
+                    const err = await res.json();
+                    alert('Sync failed: ' + (err.error || 'Unknown error'));
                 }
             } catch (e) {
                 console.error(e);
@@ -1747,9 +1750,11 @@
                 if (data.dialogueId) {
                     loadDialogues(); // Refresh sidebar
                     setTimeout(() => selectChat(data.dialogueId), 500); // Open chat
+                } else {
+                    throw new Error(data.error || 'Failed to start chat');
                 }
             } catch (e) {
-                alert('Failed to start chat');
+                alert('Failed to start chat: ' + e.message);
             }
         }
 
