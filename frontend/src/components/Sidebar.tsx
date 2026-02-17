@@ -92,11 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ chatState }) => {
                     return (
                         <div
                             key={d.id}
-                            onClick={() => {
-                                console.log('Clicked chat', d.id);
-                                // alert(`Clicked chat ${d.id}`); // Temporary debug
-                                selectChat(d.id);
-                            }}
+                            onClick={() => selectChat(d.id)}
                             className={`p-3 border-b border-border/50 cursor-pointer transition-colors hover:bg-muted/50 ${isActive ? 'bg-muted border-l-4 border-l-primary' : ''
                                 }`}
                         >
@@ -174,6 +170,8 @@ const StatusIndicator = () => {
     }, []);
 
     const handleReconnect = async () => {
+        console.log('Login/Reconnect clicked');
+        // alert('Debugging: Login clicked. Check console.'); 
         if (showQr) { setShowQr(false); return; }
 
         // 1. Trigger Reconnect (Force server to restart client)
