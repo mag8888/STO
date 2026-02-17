@@ -4,6 +4,10 @@ import path from 'path';
 import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
+import { initClient, getClient, reconnectClient, getQR } from './client';
+import { sendMessageToUser, sendDraftMessage, scanChatForLeads, ensureUserAndDialogue, saveMessageToDb, createDraftMessage } from './actions';
+import { generateResponse } from './gpt';
+import { startListener } from './listener';
 
 const prisma = new PrismaClient();
 const fastify = Fastify({ logger: true });
@@ -128,7 +132,6 @@ fastify.get('/dialogues/:id', async (req, reply) => {
 
 fastify.get('/status', async (request, reply) => {
     try {
-        const { getClient } = await import('./client');
         const client = getClient();
 
         let connected = false;
@@ -153,7 +156,6 @@ fastify.post('/send', async (request, reply) => {
     if (!username || !message) return reply.code(400).send({ error: 'Missing fields' });
 
     try {
-        const { sendMessageToUser } = await import('./actions');
         // page is null
         await sendMessageToUser(null, username, message);
         return { success: true };
@@ -235,7 +237,6 @@ fastify.post('/messages/:id/approve', async (request, reply) => {
     const { updatedText } = request.body as { updatedText?: string };
 
     try {
-        const { sendDraftMessage } = await import('./actions');
         const result = await sendDraftMessage(null, parseInt(id), updatedText);
         return result;
     } catch (err: any) {
@@ -275,7 +276,6 @@ fastify.post('/users/:id/block', async (req, reply) => {
 
 fastify.post('/reconnect', async (req, reply) => {
     try {
-        const { reconnectClient } = await import('./client');
         await reconnectClient();
         return { success: true };
     } catch (e) {
@@ -286,7 +286,6 @@ fastify.post('/reconnect', async (req, reply) => {
 
 fastify.get('/login-qr', async (req, reply) => {
     try {
-        const { getQR, getClient } = await import('./client');
         const token = getQR();
 
         // Detailed debugging
@@ -299,13 +298,20 @@ fastify.get('/login-qr', async (req, reply) => {
                 return reply.code(503).send({ error: 'Client not initialized yet. Please wait.' });
             }
             if (client.connected) {
-                return reply.code(400).send({ error: 'Client is already connected! No QR needed.' });
+                // If connected, check if authorized
+                const authorized = await client.isUserAuthorized();
+                if (authorized) {
+                    return reply.code(400).send({ error: 'Client is already connected and authorized! No QR needed.' });
+                }
+                // If connected but not authorized, and Token is null...
+                // It means we might be waiting for QR generation callback?
             }
             return reply.code(404).send({ error: 'QR code not generated yet. Please wait a few seconds and try again.' });
         }
 
         const QRCode = require('qrcode');
         // Generate QR code image buffer from the base64 token string (same as qrcode-terminal)
+        // qrcode package takes a string/buffer
         const buffer = await QRCode.toBuffer(token.toString('base64'));
 
         reply.type('image/png');
@@ -321,7 +327,6 @@ fastify.post('/scan-chat', async (req, reply) => {
     if (!chatLink) return reply.code(400).send({ error: 'Missing chatLink' });
 
     try {
-        const { scanChatForLeads } = await import('./actions');
         // Extract username from link if needed (e.g. t.me/username -> username)
         let username = chatLink.replace('https://t.me/', '').replace('@', '').split('/')[0];
 
@@ -338,10 +343,6 @@ fastify.post('/scout/start', async (req, reply) => {
     if (!username || !context) return reply.code(400).send({ error: 'Missing fields' });
 
     try {
-        const { ensureUserAndDialogue, saveMessageToDb, createDraftMessage } = await import('./actions');
-        const { generateResponse } = await import('./gpt');
-        const { PrismaClient } = await import('@prisma/client');
-
         // 1. Create/Get User & Dialogue
         const { user, dialogue } = await ensureUserAndDialogue(username, name, accessHash);
 
@@ -370,8 +371,8 @@ fastify.post('/scout/start', async (req, reply) => {
         }));
 
         const facts = (user.facts as any) || {};
-        const templates = {}; // Could fetch templates here
-        const kbItems: any[] = [];
+        // const templates = {}; // Could fetch templates here
+        // const kbItems: any[] = [];
 
         const stage = dialogue.stage || 'DISCOVERY';
 
@@ -379,8 +380,8 @@ fastify.post('/scout/start', async (req, reply) => {
             history,
             stage as any,
             facts,
-            templates,
-            kbItems
+            {},
+            []
         );
 
         if (gptResult) {
@@ -414,9 +415,6 @@ fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
     const { instructions } = req.body as { instructions?: string } || {};
 
     try {
-        const { createDraftMessage } = await import('./actions');
-        const { generateResponse } = await import('./gpt');
-
         const dialogue = await prisma.dialogue.findUnique({
             where: { id: Number(id) },
             include: { user: true }
@@ -539,13 +537,11 @@ const start = async () => {
         console.log(`Server listening on http://0.0.0.0:${port}`);
 
         // Initialize GramJS
-        const { initClient } = await import('./client');
         await initClient();
 
-        const client = await import('./client').then(m => m.getClient());
+        const client = getClient();
         if (client) {
             console.log("GramJS Client initialized. Starting listener...");
-            const { startListener } = await import('./listener');
             startListener(null);
         }
 
