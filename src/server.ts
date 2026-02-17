@@ -130,12 +130,18 @@ fastify.get('/status', async (request, reply) => {
     try {
         const { getClient } = await import('./client');
         const client = getClient();
-        const connected = client ? client.connected : false;
+
+        let connected = false;
         let me = null;
-        if (connected) {
-            // Basic cache or fetch
-            try { me = await client.getMe(); } catch (e) { }
+
+        if (client && client.connected) {
+            // Check if actually authorized
+            connected = await client.isUserAuthorized();
+            if (connected) {
+                try { me = await client.getMe(); } catch (e) { }
+            }
         }
+
         return { connected, me };
     } catch (err) {
         return { connected: false, error: err };
