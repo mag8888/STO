@@ -51,11 +51,17 @@ fastify.get('/logs', async (req, reply) => {
 
 // Serve static files from public directory
 // Serve React Frontend (Built)
-fastify.register(fastifyStatic, {
-    root: path.join(__dirname, '../frontend/dist'),
-    prefix: '/',
-    wildcard: false // Disable wildcard to allow API routes and manual SPA handling if needed
-});
+try {
+    const frontendDist = path.join(__dirname, '../frontend/dist');
+    console.log(`[STATIC] Registering static files from: ${frontendDist}`);
+    fastify.register(fastifyStatic, {
+        root: frontendDist,
+        prefix: '/',
+        wildcard: false // Disable wildcard to allow API routes and manual SPA handling if needed
+    });
+} catch (e) {
+    console.error('[STATIC] Failed to register static files:', e);
+}
 
 // Route root to index.html
 fastify.get('/', (req, reply) => {
@@ -802,26 +808,56 @@ fastify.delete('/triggers/:id', async (req, reply) => {
 
 const start = async () => {
     try {
-        console.log('Starting server...');
+        console.log('[STARTUP] Starting server...');
+        console.log(`[STARTUP] NODE_ENV: ${process.env.NODE_ENV}`);
+        console.log(`[STARTUP] Current Directory: ${__dirname}`);
+
+        // Debug Frontend Path
+        const frontendPath = path.join(__dirname, '../frontend/dist');
+        console.log(`[STARTUP] Frontend Path: ${frontendPath}`);
+        if (require('fs').existsSync(frontendPath)) {
+            console.log('[STARTUP] Frontend directory exists.');
+            console.log('[STARTUP] Contents:', require('fs').readdirSync(frontendPath));
+        } else {
+            console.error('[STARTUP] ERROR: Frontend directory DOES NOT EXIST!');
+        }
+
+        console.log('[STARTUP] Connecting to Database...');
         await prisma.$connect();
+        console.log('[STARTUP] Database connected.');
 
         const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+        console.log(`[STARTUP] Binding to 0.0.0.0:${port}`);
+
         await fastify.listen({ port, host: '0.0.0.0' });
-        console.log(`Server listening on http://0.0.0.0:${port}`);
+        console.log(`[STARTUP] Server listening on http://0.0.0.0:${port}`);
 
         // Initialize GramJS
+        console.log('[STARTUP] Initializing GramJS...');
         await initClient();
+        console.log('[STARTUP] GramJS initialization complete.');
 
         const client = getClient();
         if (client) {
             console.log("GramJS Client initialized. Starting listener...");
-            startListener(null);
+            startListener(client).catch(err => console.error("Listener failed:", err));
+        } else {
+            console.log("GramJS Client not ready. Listening for QR code login.");
         }
 
     } catch (err) {
+        console.error('[STARTUP] FATAL ERROR:', err);
         fastify.log.error(err);
         process.exit(1);
     }
+};
+startListener(null);
+        }
+
+    } catch (err) {
+    fastify.log.error(err);
+    process.exit(1);
+}
 };
 
 start();
