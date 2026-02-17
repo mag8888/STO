@@ -140,7 +140,7 @@
             <div class="chat-list-panel">
                 <div class="chat-list-header" style="display:flex; gap:0.5rem;">
                     <input type="text" class="search-input" placeholder="Search chats..." id="chat-search"
-                        onkeyup="renderChatList(dialogues)" style="flex:1;">
+                        onkeyup="renderChatList(dialogues)" style="flex:1; width:auto;">
                     <button class="btn btn-secondary" onclick="syncChats()" title="Sync Telegram Chats"
                         style="padding:0.5rem;">
                         <ion-icon name="sync-outline"></ion-icon>
@@ -423,6 +423,8 @@
         // --- State ---
         let dialogues = [];
         let currentDialogueId = null;
+
+        console.log('Admin Panel Loaded. Sync Button check:', !!document.querySelector('button[onclick="syncChats()"]'));
 
         // --- Navigation ---
         function switchView(viewId) {
