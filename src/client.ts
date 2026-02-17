@@ -58,15 +58,17 @@ export async function initClient() {
         client.signInUserWithQrCode(
             { apiId: API_ID, apiHash: API_HASH },
             {
-                onError: (e) => console.log(e),
+                onError: (e) => console.error("[CRITICAL] QR Login Error:", e),
                 qrCode: async (code) => {
-                    console.log("Scan this QR code:");
+                    console.log("[DEBUG] QR Code received from Telegram!");
                     currentQR = code.token;
-                    qrcode.generate(code.token.toString('base64'), { small: true });
+                    try {
+                        qrcode.generate(code.token.toString('base64'), { small: true });
+                    } catch (err) { console.error("Failed to print QR to terminal:", err); }
                 }
             }
         ).then(async () => {
-            console.log("You should now be connected.");
+            console.log("[DEBUG] signInUserWithQrCode resolved. User is authenticated.");
             currentQR = null; // Clear QR
 
             // Save session if new
@@ -79,7 +81,7 @@ export async function initClient() {
                 console.log("----------------------------------------------------------------\n");
             }
         }).catch(e => {
-            console.error("Login failed:", e);
+            console.error("[CRITICAL] signInUserWithQrCode failed/rejected:", e);
         });
 
     } catch (e) {
