@@ -865,6 +865,12 @@ const start = async () => {
         console.log(`[STARTUP] NODE_ENV: ${process.env.NODE_ENV}`);
         console.log(`[STARTUP] Current Directory: ${__dirname}`);
 
+        // Env Checks
+        if (!process.env.DATABASE_URL) console.error('[STARTUP] ⚠️  DATABASE_URL is missing!');
+        if (!process.env.OPENAI_API_KEY) console.error('[STARTUP] ⚠️  OPENAI_API_KEY is missing!');
+        if (!process.env.TELEGRAM_API_ID) console.error('[STARTUP] ⚠️  TELEGRAM_API_ID is missing!');
+        if (!process.env.TELEGRAM_API_HASH) console.error('[STARTUP] ⚠️  TELEGRAM_API_HASH is missing!');
+
         // Debug Frontend Path
         const frontendPath = path.join(__dirname, '../frontend/dist');
         console.log(`[STARTUP] Frontend Path: ${frontendPath}`);
