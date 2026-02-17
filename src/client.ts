@@ -44,9 +44,11 @@ export async function initClient() {
     try {
         // Use QR Code Login
         const qrcode = require('qrcode-terminal');
+        console.log("[DEBUG] Connecting to Telegram servers...");
         await client.connect();
 
         // Start login flow in background (don't await) so server can start
+        console.log("[DEBUG] Client connected. Requesting QR code...");
         client.signInUserWithQrCode(
             { apiId: API_ID, apiHash: API_HASH },
             {

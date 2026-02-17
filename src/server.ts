@@ -280,10 +280,22 @@ fastify.post('/reconnect', async (req, reply) => {
 
 fastify.get('/login-qr', async (req, reply) => {
     try {
-        const { getQR } = await import('./client');
+        const { getQR, getClient } = await import('./client');
         const token = getQR();
+
+        // Detailed debugging
+        const client = getClient();
+        console.log(`[DEBUG] /login-qr requested. Client exists: ${!!client}, Connected: ${client?.connected}, Token available: ${!!token}`);
+
         if (!token) {
-            return reply.code(404).send({ error: 'No QR code available. Client might be connected or initializing.' });
+            // Check if client is even initialized
+            if (!client) {
+                return reply.code(503).send({ error: 'Client not initialized yet. Please wait.' });
+            }
+            if (client.connected) {
+                return reply.code(400).send({ error: 'Client is already connected! No QR needed.' });
+            }
+            return reply.code(404).send({ error: 'QR code not generated yet. Please wait a few seconds and try again.' });
         }
 
         const QRCode = require('qrcode');
