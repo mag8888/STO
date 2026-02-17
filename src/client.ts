@@ -45,7 +45,13 @@ export async function initClient() {
         // Use QR Code Login
         const qrcode = require('qrcode-terminal');
         console.log("[DEBUG] Connecting to Telegram servers...");
-        await client.connect();
+
+        // Timeout for connection
+        const connectPromise = client.connect();
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out')), 15000));
+
+        await Promise.race([connectPromise, timeoutPromise]);
+        console.log("[DEBUG] Connected to Telegram servers.");
 
         // Start login flow in background (don't await) so server can start
         console.log("[DEBUG] Client connected. Requesting QR code...");
