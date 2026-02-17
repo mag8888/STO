@@ -1,4 +1,5 @@
 import 'dotenv/config';
+console.log('[BOOT] Server script loaded. Importing dependencies...');
 import Fastify from 'fastify';
 import path from 'path';
 import fastifyStatic from '@fastify/static';

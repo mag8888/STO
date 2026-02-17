@@ -1,6 +1,6 @@
 import { TelegramClient } from "telegram";
 import { StringSession } from "telegram/sessions";
-const input = require("input");
+// const input = require("input");
 import fs from "fs";
 
 const API_ID = parseInt(process.env.TELEGRAM_API_ID || "0");
