@@ -153,6 +153,10 @@
                         style="padding:0.5rem;">
                         <ion-icon name="sync-outline"></ion-icon>
                     </button>
+                    <button class="btn btn-primary" onclick="openScoutModal()" title="Add New Chat"
+                        style="padding:0.5rem 0.8rem; font-weight:bold;">
+                        +
+                    </button>
                 </div>
                 <!-- Filter Tabs -->
                 <div
@@ -280,12 +284,15 @@
                     Enter a public chat link (e.g. t.me/freelance_chat) to scan for leads matching keywords: "ищу",
                     "need", "клиент", etc.
                 </p>
-                <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                <div style="display:flex; gap:1rem; flex-wrap:wrap; display:none;">
                     <input type="text" id="scout-link" class="message-input" style="flex:1; min-width:200px;"
                         placeholder="https://t.me/example_chat">
                     <input type="number" id="scout-limit" class="message-input" style="width:100px;" value="50" min="10"
                         max="200">
                     <button class="btn btn-primary" onclick="scanChat()">Scan Now</button>
+                </div>
+                <div style="margin-top:1rem; color:var(--text-secondary); font-size:0.9rem;">
+                    To add a new chat or scan a link, use the <b>+</b> button in the sidebar header (above).
                 </div>
             </div>
 
@@ -1139,18 +1146,31 @@
         }
 
         // --- Scout Logic ---
-        async function scanChat() {
-            const link = document.getElementById('scout-link').value;
-            const limit = document.getElementById('scout-limit').value || 50;
+        async function scanChat(manualLink) {
+            let link = manualLink;
+
+            if (!link) {
+                const multiInput = document.getElementById('scout-link');
+                const scanInput = document.getElementById('scan-input'); // Backup
+                if (multiInput) link = multiInput.value;
+                else if (scanInput) link = scanInput.value;
+            }
+
+            const limit = document.getElementById('scout-limit')?.value || 50; // Optional safe access
+
             if (!link) {
                 alert('Please enter a chat link');
                 return;
             }
 
+            // Button feedback (if button exists)
             const btn = document.querySelector('#scout-view .btn-primary');
-            const originalText = btn.textContent;
-            btn.textContent = 'Scanning... (this may take a while) ⏳';
-            btn.disabled = true;
+            let originalText = '';
+            if (btn) {
+                originalText = btn.textContent;
+                btn.textContent = 'Scanning... (this may take a while) ⏳';
+                btn.disabled = true;
+            }
 
             document.getElementById('scout-results-area').style.display = 'block';
             document.getElementById('scout-list').innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:2rem;">Scanning...</div>';
@@ -1965,6 +1985,31 @@
                 loadTriggers();
             } catch (e) {
                 alert('Failed to delete trigger');
+            }
+        }
+
+        function openScoutModal() {
+            const link = prompt("Enter @username or t.me/link to scan/add:");
+            if (link) {
+                // Determine if we are in Scout view or just want to add
+                // We'll reuse scanChat logic
+                scanChat(link);
+                // Also switch to Scout view to see results
+                switchView('scout');
+            }
+        }
+
+        function toggleScanText(index, full, short) {
+            const el = document.getElementById(`scan-text-${index}`);
+            const link = document.getElementById(`scan-toggle-${index}`);
+            if (el.dataset.state === 'short') {
+                el.innerText = full;
+                el.dataset.state = 'full';
+                link.innerText = 'Read less';
+            } else {
+                el.innerText = short;
+                el.dataset.state = 'short';
+                link.innerText = 'Read more';
             }
         }
 
