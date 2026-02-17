@@ -6,8 +6,7 @@
   "scripts": {
     "start": "ts-node src/server.ts",
     "dev": "ts-node src/server.ts",
-    "build": "tsc",
-    "postinstall": "npm install --prefix frontend && npm run build --prefix frontend"
+    "build": "tsc"
   },
   "keywords": [
     "telegram",

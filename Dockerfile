@@ -45,6 +45,9 @@ RUN npm ci
 # Copy source
 COPY . .
 
+# Build Frontend
+RUN cd frontend && npm install && npm run build
+
 # Generate Prisma Client
 RUN npx prisma generate
 
