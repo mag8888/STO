@@ -133,7 +133,7 @@ fastify.post('/dialogues/start', async (req, reply) => {
         const gptResult = await generateResponse(
             history,
             'DISCOVERY', // Force Discovery stage
-            user,
+            user, // Fixed: Pass full user object
             {},
             []
         );
@@ -511,7 +511,7 @@ fastify.post('/scout/start', async (req, reply) => {
         const gptResult = await generateResponse(
             history,
             stage as any,
-            facts,
+            user, // Fixed: Pass full user object
             {},
             []
         );
@@ -584,7 +584,7 @@ fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
         const gptResult = await generateResponse(
             history,
             dialogue.stage as any,
-            facts,
+            dialogue.user, // Fixed: Pass full user object
             {},
             [],
             instructions, // <--- New Argument
