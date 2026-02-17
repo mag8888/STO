@@ -846,11 +846,27 @@
             // If I want to add "Edit" or "Block" buttons, I should put them in `chat-actions` or similar.
             // The simple version just set textContent.
 
+            // Source Badge & Move Button logic inside header
+            let typeBadge = '';
+            let moveBtn = '';
+
+            const isScout = dialogue.source === 'SCOUT' || (dialogue.user && dialogue.user.sourceChatId);
+
+            if (isScout) {
+                typeBadge = '<span class="badge" style="background:#8e44ad; margin-left:0.5rem;">SCOUT</span>';
+                moveBtn = `<button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.5rem; margin-left:0.5rem;" onclick="updateDialogueSource(${dialogue.id}, 'INBOUND')" title="Move to Direct">To Direct</button>`;
+            } else {
+                typeBadge = '<span class="badge" style="background:#2ecc71; margin-left:0.5rem;">DIRECT</span>';
+                moveBtn = `<button class="btn btn-secondary" style="font-size:0.7rem; padding:0.2rem 0.5rem; margin-left:0.5rem;" onclick="updateDialogueSource(${dialogue.id}, 'SCOUT')" title="Move to Scout">To Scout</button>`;
+            }
+
             header.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                    <div>
+                    <div style="display:flex; align-items:center;">
                         <span style="font-weight:600;">${fullName}</span>
                         <span style="font-size:0.8em; color:var(--text-secondary); margin-left:0.5rem;">${username}</span>
+                        ${typeBadge}
+                        ${moveBtn}
                     </div>
                 </div>
              `;
@@ -1352,6 +1368,35 @@
                 card.innerHTML = `<div class="stat-label">${t.name}</div><div>${t.content}</div>`;
                 container.appendChild(card);
             });
+        }
+
+        async function updateDialogueSource(id, newSource) {
+            if (!confirm(`Move this chat to ${newSource}?`)) return;
+
+            try {
+                const res = await fetch(`/dialogues/${id}/source`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: newSource })
+                });
+
+                if (res.ok) {
+                    // Update local data
+                    const d = dialogues.find(x => x.id === id);
+                    if (d) d.source = newSource;
+
+                    // Refresh view
+                    renderChatList(dialogues);
+                    // Re-render header if it's the active chat
+                    if (currentDialogueId === id) renderChatHeader(d);
+
+                } else {
+                    alert('Failed to update source');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Error updating source');
+            }
         }
 
         async function updateUserStatus(newStatus) {

@@ -94,6 +94,25 @@ fastify.get('/dialogues', async (req, reply) => {
     }
 });
 
+fastify.post('/dialogues/:id/source', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { source } = req.body as { source: 'INBOUND' | 'SCOUT' };
+
+    if (!['INBOUND', 'SCOUT'].includes(source)) {
+        return reply.code(400).send({ error: 'Invalid source' });
+    }
+
+    try {
+        const dialogue = await prisma.dialogue.update({
+            where: { id: Number(id) },
+            data: { source }
+        });
+        return dialogue;
+    } catch (e) {
+        return reply.code(500).send({ error: 'Failed to update source' });
+    }
+});
+
 fastify.post('/dialogues/:id/archive', async (req, reply) => {
     const { id } = req.params as { id: string };
     try {
@@ -388,7 +407,7 @@ fastify.post('/scout/start', async (req, reply) => {
         }
 
         // 1. Create/Get User & Dialogue
-        const { user, dialogue } = await ensureUserAndDialogue(username, name, accessHash);
+        const { user, dialogue } = await ensureUserAndDialogue(username, name, accessHash, 'SCOUT');
 
         // 2. Save "Context" message (as if user sent it)
         // Check if last message is duplicate to avoid spamming if clicked multiple times
