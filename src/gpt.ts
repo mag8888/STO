@@ -34,8 +34,12 @@ export async function generateResponse(
     rules: string[] = []
 ): Promise<GPTResponse | null> {
 
-    // 1. Determine what we already know and what's missing
-    const missingField = PROFILE_FIELDS.find(f => !user[f.key as keyof User] || user[f.key as keyof User] === '');
+    // 1. Determine State
+    // Only START profiling if we are in QUALIFICATION stage
+    let missingField: any = null;
+    if (stage === 'QUALIFICATION') {
+        missingField = PROFILE_FIELDS.find(f => !user[f.key as keyof User] || user[f.key as keyof User] === '');
+    }
 
     let systemPrompt = `You are a professional Networking Assistant. Your goal is to get to know the user to connect them with useful people.
 You speak in a lively, friendly manner, like a real human. No formal "bot" language. Short messages (1-2 sentences).
@@ -51,20 +55,27 @@ USER PROFILE:
 - Current Income: ${user.currentIncome || 'Unknown'}
 - Desired Income: ${user.desiredIncome || 'Unknown'}
 
-GOAL: Complete the user profile naturally.
+GOAL BY STAGE:
+1. DISCOVERY / OFFER: 
+   - Briefly explain value: "We do online networking and can connect you with the right people daily."
+   - Ask what their current requests/goals are to gauge interest.
+   - IF they say they are interested / "Yes" / "What next?", CHANGE stage to "QUALIFICATION".
+
+2. QUALIFICATION (Profiling):
+   - We need to fill the missing profile fields.
+   - CURRENT MISSING FIELD: ${missingField ? `"${missingField.key}"` : "NONE (Profile Complete)"}
 `;
 
-    if (missingField) {
+    if (stage === 'QUALIFICATION' && missingField) {
         systemPrompt += `
-Current Goal: Find out "${missingField.key}".
-Strategy:
-1. "Mirror" the user's previous answer (briefly confirm/praise what they just said).
-2. Then ask: "${missingField.question}" (You can rephrase it slightly to fit context, but keep the meaning).
-3. If the user refuses to answer (e.g. "skip"), accept it and move to the next topic.
+STRATEGY for QUALIFICATION:
+1. "Mirror" the user's previous answer (briefly confirm/praise).
+2. Ask: "${missingField.question}" (Adapt naturally).
+3. If they accept networking, START by asking for the Business Card (if missing).
 `;
-    } else {
+    } else if (stage === 'QUALIFICATION' && !missingField) {
         systemPrompt += `
-Current Goal: Profile is complete! Thank the user and tell them you will look for matches.
+STRATEGY: Profile is complete! Thank user and tell them you are looking for matches.
 `;
     }
 
@@ -75,27 +86,28 @@ INSTRUCTIONS:
 - If the user asks a question, answer it using the KB below or common sense.
 - ALWAYS extract any new profile data from the user's last message into the JSON output.
 - **IMPORTANT**: If the user provides a "Business Card" or long bio, try to EXTRACT as many fields as possible (City, Activity, Income, etc.) from it immediately.
+`;
 
 RELEVANT KNOWLEDGE BASE:
-${kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n')}
+${ kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n') }
 
 PERMANENT RULES:
-${rules.join('\n')}
+${ rules.join('\n') }
 
-${instructions ? `\nCUSTOM INSTRUCTIONS:\n${instructions}` : ''}
+${ instructions ? `\nCUSTOM INSTRUCTIONS:\n${instructions}` : '' }
 
-OUTPUT FORMAT (JSON):
-{
-  "reply": "Your extracted reply",
-  "extractedProfile": {
-      "city": "Paris",
-      "activity": "Marketing",
+OUTPUT FORMAT(JSON):
+    {
+        "reply": "Your extracted reply",
+            "extractedProfile": {
+            "city": "Paris",
+                "activity": "Marketing",
       ... (only fields found in the LAST message)
-  },
-  "nextStage": "${stage}",
-  "newFacts": { ... }
-}
-`;
+        },
+        "nextStage": "${stage}",
+            "newFacts": { ... }
+    }
+    `;
 
     try {
         const messages: any[] = [
@@ -117,7 +129,7 @@ OUTPUT FORMAT (JSON):
         const content = completion.choices[0].message.content;
         if (!content) return null;
 
-        const jsonStr = content.replace(/```json\n?|```/g, '').trim();
+        const jsonStr = content.replace(/```json\n ?| ```/g, '').trim();
         return JSON.parse(jsonStr);
     } catch (e: any) {
         console.error('[GPT] Error:', e);
