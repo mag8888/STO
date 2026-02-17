@@ -134,6 +134,108 @@ const Sidebar: React.FC<SidebarProps> = ({ chatState }) => {
                 )}
             </div>
         </div>
+
+            {/* Connection Status Footer */ }
+    <div className="p-3 border-t border-border bg-muted/30 text-xs">
+        {/* We need a way to check status. Ideally passed via props or separate hook. 
+                    For now, I'll add a simple local poll or just a visual indicator if I can get state. 
+                    Actually, let's just add a Reconnect button that always appears for now if we want to force it. 
+                    Better: Use the useChat loading state or add a specific status hook.
+                    
+                    Let's assume we want a visual indicator. 
+                */}
+        <StatusIndicator />
+    </div>
+        </div >
+    );
+};
+
+const StatusIndicator = () => {
+    const [status, setStatus] = React.useState<{ connected: boolean, me?: any } | null>(null);
+    const [showQr, setShowQr] = React.useState(false);
+    const [qrBlob, setQrBlob] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        const check = async () => {
+            try {
+                const res = await fetch('/status');
+                const data = await res.json();
+                setStatus(data);
+            } catch (e) {
+                setStatus({ connected: false });
+            }
+        };
+        check();
+        const interval = setInterval(check, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const handleReconnect = async () => {
+        if (showQr) { setShowQr(false); return; }
+
+        // 1. Trigger Reconnect
+        // await fetch('/reconnect', { method: 'POST' });
+
+        // 2. Fetch QR
+        setShowQr(true);
+        const res = await fetch('/login-qr');
+        if (res.ok) {
+            const blob = await res.blob();
+            setQrBlob(URL.createObjectURL(blob));
+        } else {
+            const data = await res.json();
+            if (data.status === 'connected') {
+                alert('Already connected!');
+                setShowQr(false);
+                return;
+            }
+            alert('Error fetching QR');
+        }
+    };
+
+    if (!status) return <div>Checking status...</div>;
+
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${status.connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className={status.connected ? 'text-green-600' : 'text-red-600'}>
+                        {status.connected ? 'Online' : 'Disconnected'}
+                    </span>
+                </div>
+                {!status.connected && (
+                    <button
+                        onClick={handleReconnect}
+                        className="text-[10px] bg-primary text-primary-foreground px-2 py-1 rounded hover:bg-primary/90"
+                    >
+                        {showQr ? 'Close' : 'Login'}
+                    </button>
+                )}
+            </div>
+            {showQr && qrBlob && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-background p-6 rounded-lg shadow-xl max-w-sm w-full flex flex-col items-center relative">
+                        <button
+                            onClick={() => setShowQr(false)}
+                            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+                        >
+                            ✕
+                        </button>
+                        <h3 className="font-bold mb-4">Scan to Login</h3>
+                        <img src={qrBlob} alt="QR Code" className="w-64 h-64 border border-border" />
+                        <p className="text-xs text-center mt-4 text-muted-foreground">
+                            Open Telegram > Settings > Devices > Link Desktop Device
+                        </p>
+                    </div>
+                </div>
+            )}
+            {status.me && (
+                <div className="truncate opacity-70">
+                    Logged in as: {status.me.firstName}
+                </div>
+            )}
+        </div>
     );
 };
 
