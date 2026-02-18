@@ -153,3 +153,63 @@ OUTPUT FORMAT(JSON):
         return null;
     }
 }
+// ... (Existing generateResponse)
+
+export async function analyzeText(text: string, userContext: string): Promise<{ profile: any, draft: string } | null> {
+    try {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) return null;
+
+        const openai = new OpenAI({ apiKey });
+
+        const systemPrompt = `
+        You are an expert CRM analyst and networker.
+        Your goal is to analyze a message from a potential lead in a Telegram chat and extract their professional profile.
+        
+        CONTEXT:
+        ${userContext}
+        
+        TASK:
+        1. Extract specific profile fields (if mentioned): 
+           - city
+           - activity (niche/role)
+           - currentIncome
+           - desiredIncome
+           - requests (what they need)
+           - hobbies
+           - bestClients
+           - businessCard (a summary of who they are)
+           
+        2. Draft a SHORT, CASUAL, and POLITE first message to start a conversation with them.
+           - Mention what they wrote about. (Contextualize)
+           - Do not be salesy. Just "networking".
+           - Language: Russian (implied by context).
+           
+        OUTPUT JSON:
+        {
+          "profile": { "city": "...", "activity": "...", ... },
+          "draft": "Hi [Name], saw your post about..."
+        }
+        `;
+
+        const completion = await openai.chat.completions.create({
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: text }
+            ],
+            model: 'gpt-4o',
+            temperature: 0.7,
+            response_format: { type: 'json_object' }
+        });
+
+        const content = completion.choices[0].message.content;
+        if (!content) return null;
+
+        const jsonStr = content.replace(/```json\n ?| ```/g, '').trim();
+        return JSON.parse(jsonStr);
+
+    } catch (e) {
+        console.error('[GPT] Analysis failed:', e);
+        return null;
+    }
+}

@@ -5,13 +5,11 @@ import ChatWindow from './components/ChatWindow';
 import LoginScreen from './components/LoginScreen';
 import { useChat } from './hooks/useChat';
 
+import ScoutPage from './components/ScoutPage';
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
-
-  // Create chatState only if authenticated or always? 
-  // Hooks inside conditionals are bad. Call it always, but maybe it won't fetch if auth fails?
-  // Easier: render LoginScreen if !auth.
 
   const chatState = useChat();
 
@@ -49,6 +47,7 @@ function App() {
         <div className="flex-1 flex flex-col bg-muted/20 relative">
           <Routes>
             <Route path="/" element={<ChatWindow dialogue={chatState.currentDialogue} actions={chatState} />} />
+            <Route path="/scout" element={<ScoutPage />} />
           </Routes>
         </div>
       </div>

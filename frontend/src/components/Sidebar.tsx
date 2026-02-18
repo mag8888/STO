@@ -51,6 +51,13 @@ const Sidebar: React.FC<SidebarProps> = ({ chatState }) => {
                     >
                         <Plus className="h-5 w-5" />
                     </button>
+                    <button
+                        onClick={() => window.location.href = '/scout'}
+                        className="p-2 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground"
+                        title="Scout Mode"
+                    >
+                        <Search className="h-5 w-5" />
+                    </button>
                 </div>
 
                 {/* Filters */}

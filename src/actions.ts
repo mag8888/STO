@@ -220,6 +220,7 @@ export async function checkLogin(page: any) { return true; }
 export async function startDialogue(page: any, username: string) { }
 
 // --- Scouting ---
+// --- Scouting ---
 export async function scanChatForLeads(chatUsername: string, limit: number = 50) {
     console.log(`[Scout] Scanning ${chatUsername} for leads (limit: ${limit})...`);
     const client = getClient();
@@ -229,13 +230,24 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
         const messages = await client.getMessages(chatUsername, { limit: limit });
         const leads: any[] = [];
 
-        // Simple Keywords for "Request"
-        const keywords = ['ищу', 'нужен', 'надо', 'подскажите', 'куплю', 'заказать', 'help', 'need', 'want', 'клиент', 'трафик'];
+        // Broader Networking Keywords
+        const keywords = [
+            // Requests
+            'ищу', 'нужен', 'надо', 'подскажите', 'куплю', 'заказать', 'help', 'need', 'want', 'клиент', 'трафик',
+            // Offers / Intros
+            'занимаюсь', 'работаю', 'проект', 'всем привет', 'меня зовут', 'разработчик', 'маркетолог', 'таргетолог', 'дизайнер', 'предлагаю', 'могу',
+            // Context
+            'сотрудничество', 'партнерство', 'нетворкинг', 'знакомство', 'бизнес'
+        ];
+
+        // Fetch admins to check statuses (optimization: fetch once)
+        // Note: getting participants might be restricted in some channels/groups.
+        // We will try to check sender properties first.
 
         for (const msg of messages) {
             if (!msg.message || !msg.sender) continue;
 
-            // Skip bots and self (approximate)
+            // Skip bots and self
             const senderInfo = msg.sender as any;
             if (senderInfo.bot || msg.out) continue;
 
@@ -243,12 +255,42 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
             const isMatch = keywords.some(k => text.includes(k));
 
             if (isMatch) {
-                const sender = await msg.getSender() as any; // Ensure we get full info if possible
+                const sender = await msg.getSender() as any;
                 if (!sender) continue;
+
+                // Attempt to detect Admin
+                // In GramJS/TL, ChannelParticipantAdmin or Creator has rights.
+                // However, fetching participant info for every user might be slow/rate-limited.
+                // We'll rely on what's available or try to fetch participant info if critical.
+                // For now, let's check simple flags if available, or defaulting to false.
+                let isAdmin = false;
+                try {
+                    // This is a "heavy" call if done per message. 
+                    // Optimization: In a real app, we'd cache this or fetch all admins upfront.
+                    // For now, we'll try to peek at the participant record if possible, or just skip.
+                    // Actually, 'sender' object usually doesn't have admin info relative to chat. 
+                    // We need 'getPermissions' or 'getParticipant'.
+                    // Let's try to fetch participant info for this specific user in this specific chat.
+                    const participant = await client.invoke(
+                        new Api.channels.GetParticipant({
+                            channel: chatUsername,
+                            participant: sender.id
+                        })
+                    );
+
+                    const p = (participant as any).participant;
+                    if (p && (p.className === 'ChannelParticipantAdmin' || p.className === 'ChannelParticipantCreator')) {
+                        isAdmin = true;
+                    }
+                } catch (e) {
+                    // Fails if not a channel/supergroup or no permissions to view participants
+                    // console.log('Checking admin failed:', e);
+                }
 
                 leads.push({
                     text: msg.message,
                     date: msg.date,
+                    isAdmin: isAdmin,
                     sender: {
                         id: sender.id.toString(),
                         username: sender.username,

@@ -66,3 +66,30 @@ export const getTemplates = async () => {
     const response = await api.get<{ id: number; name: string; content: string }[]>('/templates');
     return response.data;
 };
+
+// --- Scout API ---
+
+export const getScoutChats = async () => {
+    const response = await api.get<{ id: number; title: string; username: string; link: string }[]>('/scout/chats');
+    return response.data;
+};
+
+export const addScoutChat = async (link: string) => {
+    const response = await api.post('/scout/chats', { link });
+    return response.data;
+};
+
+export const scanChat = async (username: string) => {
+    const response = await api.get<{ leads: any[] }>(`/scout/chats/${username}/leads`);
+    return response.data;
+};
+
+export const analyzeLead = async (text: string, user: any) => {
+    const response = await api.post<{ profile: any; draft: string }>('/scout/analyze', { text, user });
+    return response.data;
+};
+
+export const importLead = async (user: any, profile: any, draft: string, sourceChatId: number) => {
+    const response = await api.post('/scout/import', { user, profile, draft, sourceChatId });
+    return response.data;
+};

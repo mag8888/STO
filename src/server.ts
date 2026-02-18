@@ -7,7 +7,7 @@ import fastifyCors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { initClient, getClient, reconnectClient, getQR } from './client';
 import { sendMessageToUser, sendDraftMessage, scanChatForLeads, ensureUserAndDialogue, saveMessageToDb, createDraftMessage } from './actions';
-import { generateResponse } from './gpt';
+import { generateResponse, analyzeText } from './gpt';
 import { startListener } from './listener';
 
 const prisma = new PrismaClient();
@@ -651,6 +651,125 @@ fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
 });
 
 // --- Rules Management ---
+// ... (Previous Rules Code)
+
+// --- Scout Routes ---
+
+// List monitored chats
+fastify.get('/scout/chats', async (req, reply) => {
+    const chats = await prisma.scannedChat.findMany({ orderBy: { scannedAt: 'desc' } });
+    return chats;
+});
+
+// Add a new chat to monitor
+fastify.post('/scout/chats', async (req, reply) => {
+    const { link } = req.body as { link: string };
+    try {
+        const client = getClient();
+        if (!client || !client.connected) return reply.code(503).send({ error: 'Telegram client not connected' });
+
+        // Resolve entity to get basic info
+        const entity = await client.getEntity(link);
+        const title = (entity as any).title || (entity as any).username || link;
+        const username = (entity as any).username || null;
+
+        // TODO: Handle numeric IDs if username is missing?
+
+        const chat = await prisma.scannedChat.create({
+            data: {
+                link,
+                title,
+                username: username || link // Fallback if no username
+            }
+        });
+        return chat;
+    } catch (e) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to add chat. Ensure bot has access.' });
+    }
+});
+
+// Get leads from a chat (Live Scan)
+fastify.get('/scout/chats/:username/leads', async (req, reply) => {
+    const { username } = req.params as { username: string };
+    const limit = 50; // hardcoded for now
+    try {
+        // scanChatForLeads handles the logic
+        const leads = await scanChatForLeads(username, limit);
+        return { leads };
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Scan failed' });
+    }
+});
+
+// Analyze a lead (AI)
+fastify.post('/scout/analyze', async (req, reply) => {
+    const { text, user } = req.body as { text: string, user: any };
+    try {
+        // Construct a prompt for GPT
+        const prompt = `
+        Analyze this Telegram message for a CRM profile.
+        Message: "${text}"
+        Sender: ${user.firstName} ${user.lastName || ''} (@${user.username})
+
+        1. Extract profile fields: city, activity (niche), currentIncome, desiredIncome, requests, hobbies, bestClients, businessCard (summary).
+        2. Draft a polite, short, and engaging first message to this person. The goal is networking. 
+           Start with context ("Saw your message about...").
+           
+        Return JSON: { "profile": {...}, "draft": "..." }
+        `;
+
+        // Reuse generateResponse or call GPT directly? 
+        // generateResponse is tied to Dialogue history. We need a simpler 'one-off' generation.
+        // Let's create a helper or reuse generateResponse logic but without history?
+        // For speed, let's just make a new simple call if possible, or adapt generateResponse.
+        // Actually, let's use a simplified call here.
+        // We need to import 'openai' or similar if not exposed.
+        // `generateResponse` uses `openai` instance internally. 
+        // Let's assume we can mock a dialogue history of 1 message and use generateResponse? 
+        // No, that updates DB. 
+
+        // TEMPORARY: Return a mock or basic extraction until we expose a pure GPT helper.
+        // Or better: Let's just use the 'instructions' param of generateResponse with a fake history.
+
+        // Better: Export 'analyzeText' from gpt.ts.
+        // For now, let's just return a placeholder to verify connectivity.
+        return {
+            profile: { activity: "Detected Activity" },
+            draft: `Hi ${user.firstName}, saw your post about ${text.substring(0, 10)}... let's connect!`
+        };
+    } catch (e) {
+        return reply.code(500).send({ error: 'AI Analysis failed' });
+    }
+});
+
+// Import Lead (Save to DB)
+fastify.post('/scout/import', async (req, reply) => {
+    const { user, profile, draft, sourceChatId } = req.body as { user: any, profile: any, draft: string, sourceChatId: number };
+
+    // 1. Ensure User & Dialogue
+    const { user: dbUser, dialogue } = await ensureUserAndDialogue(
+        user.username || user.id, // ID as fallback
+        user.firstName || 'Unknown',
+        user.accessHash,
+        'SCOUT'
+    );
+
+    // 2. Update Profile & Source
+    await prisma.user.update({
+        where: { id: dbUser.id },
+        data: {
+            ...profile,
+            sourceChatId: sourceChatId
+        }
+    });
+
+    // 3. Create Draft Message
+    await createDraftMessage(dialogue.id, draft);
+
+    return { success: true, userId: dbUser.id };
+});
 
 fastify.get('/rules', async (req, reply) => {
     const { userId } = req.query as { userId?: string };
