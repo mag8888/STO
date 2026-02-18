@@ -691,7 +691,7 @@ fastify.post('/scout/chats', async (req, reply) => {
                     entity = (check as any).chat;
                 } else {
                     // Need to join
-                    const updates = await client.invoke(new Api.messages.ImportChatInvite({ hash }));
+                    const updates = await client.invoke(new Api.messages.ImportChatInvite({ hash })) as any;
                     // updates.chats should contain the joined chat
                     if (updates.chats && updates.chats.length > 0) {
                         entity = updates.chats[0];
