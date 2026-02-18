@@ -172,6 +172,13 @@ export async function sendMessageToUser(userId: number, text: string) {
                 status: 'SENT'
             }
         });
+
+        // Update Dialogue LastUpdated timestamp to fix sorting
+        await prisma.dialogue.update({
+            where: { id: dialogueId },
+            data: { updatedAt: new Date() }
+        });
+
         console.log(`[ACTION] Created DB message: ${msg.id}`);
 
         // 2. Send via GramJS
