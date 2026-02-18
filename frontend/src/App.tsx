@@ -48,6 +48,7 @@ function App() {
           <Routes>
             <Route path="/" element={<ChatWindow dialogue={chatState.currentDialogue} actions={chatState} />} />
             <Route path="/scout" element={<ScoutPage />} />
+            <Route path="/scout/:username" element={<ScoutPage />} />
           </Routes>
         </div>
       </div>

@@ -51,6 +51,7 @@ model ScannedChat {
   title       String? // Chat title
   link        String? // Original link used
   scannedAt   DateTime @default(now())
+  lastLeadsCount Int   @default(0)
   
   users       User[]
 }

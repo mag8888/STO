@@ -303,6 +303,21 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
         }
 
         console.log(`[Scout] Found ${leads.length} potential leads.`);
+
+        // Update DB Count
+        // We need to find the ScannedChat by username/link. 
+        // Since we only have 'chatUsername', we try to find a match.
+        // Optimization: Pass ID instead of username? Or just findFirst.
+        await prisma.scannedChat.updateMany({
+            where: {
+                OR: [
+                    { username: chatUsername },
+                    { link: { contains: chatUsername } }
+                ]
+            },
+            data: { lastLeadsCount: leads.length, scannedAt: new Date() }
+        });
+
         return leads;
 
     } catch (e: any) {
