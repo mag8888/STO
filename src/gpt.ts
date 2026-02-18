@@ -1,9 +1,8 @@
 import OpenAI from 'openai';
 import { Dialogue, DialogueStage, User } from '@prisma/client';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Remove top-level initialization
+// const openai = new OpenAI({ ... });
 
 export interface GPTResponse {
     reply: string;
@@ -108,6 +107,14 @@ OUTPUT FORMAT(JSON):
 `;
 
     try {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+            console.error('[GPT] OPENAI_API_KEY is missing in environment variables!');
+            return null;
+        }
+
+        const openai = new OpenAI({ apiKey });
+
         const messages: any[] = [
             { role: 'system', content: systemPrompt },
             ...history.map(m => ({
