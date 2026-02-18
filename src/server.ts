@@ -65,17 +65,14 @@ try {
     console.error('[STATIC] Failed to register static files:', e);
 }
 
-// Route root to index.html
-
-
-// Fallback for SPA routing (optional, simplistic)
-// fastify.setNotFoundHandler((req, reply) => {
-//     if (!req.raw.url?.startsWith('/api')) {
-//         reply.sendFile('index.html');
-//     } else {
-//         reply.code(404).send({ error: 'Not Found' });
-//     }
-// });
+// Fallback for SPA routing
+fastify.setNotFoundHandler(async (req, reply) => {
+    if (req.raw.url && !req.raw.url.startsWith('/api')) {
+        return reply.sendFile('index.html');
+    }
+    // API 404
+    reply.code(404).send({ error: 'Not Found', statusCode: 404 });
+});
 
 // API Routes
 
