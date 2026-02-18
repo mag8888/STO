@@ -2,7 +2,59 @@ import React, { useState } from 'react';
 import type { Dialogue } from '../types';
 import { useChat } from '../hooks/useChat';
 import ClientCard from './ClientCard';
-import { Send, Archive, ShieldAlert, UserCheck, ArrowRightLeft, CreditCard } from 'lucide-react';
+import { Send, Archive, ShieldAlert, UserCheck, ArrowRightLeft, CreditCard, RefreshCw, Trash2, Edit2 } from 'lucide-react';
+
+interface DraftMessageProps {
+    message: any;
+    onSend: (id: number, text: string) => void;
+    onRegenerate: (id: number) => void;
+    onDelete: (id: number) => void;
+}
+
+const DraftMessage: React.FC<DraftMessageProps> = ({ message, onSend, onRegenerate, onDelete }) => {
+    const [text, setText] = useState(message.text);
+    const [isEditing, setIsEditing] = useState(false);
+
+    const handleSend = () => onSend(message.id, text);
+
+    return (
+        <div className="flex justify-end w-full">
+            <div className="max-w-[85%] w-full rounded-lg p-4 text-sm shadow-md border-2 border-dashed border-indigo-300 bg-indigo-50/80 dark:bg-indigo-950/20">
+                <div className="flex justify-between items-center mb-2">
+                    <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider flex items-center gap-1">
+                        <Edit2 className="w-3 h-3" /> Draft Proposal
+                    </span>
+                    <div className="flex gap-1">
+                        <button onClick={() => onRegenerate(message.id)} className="p-1 hover:bg-indigo-200 rounded text-indigo-600" title="Regenerate">
+                            <RefreshCw className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => onDelete(message.id)} className="p-1 hover:bg-red-200 rounded text-red-600" title="Discard">
+                            <Trash2 className="w-3 h-3" />
+                        </button>
+                    </div>
+                </div>
+
+                <textarea
+                    className="w-full bg-background/50 border border-border rounded p-2 text-sm min-h-[80px] focus:outline-none focus:ring-1 focus:ring-indigo-500 mb-2 resize-none"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                />
+
+                <div className="flex justify-between items-center">
+                    <div className="text-[10px] text-muted-foreground">
+                        AI Generated • Not sent
+                    </div>
+                    <button
+                        onClick={handleSend}
+                        className="bg-indigo-600 text-white px-3 py-1.5 rounded-md text-xs font-semibold hover:bg-indigo-700 flex items-center gap-1 transition-colors"
+                    >
+                        <Send className="w-3 h-3" /> Send Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 interface ChatWindowProps {
     dialogue: Dialogue | null;
@@ -113,19 +165,35 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
                 <div className="flex-1" /> {/* Spacer to push messages down if few */}
-                {dialogue.messages && dialogue.messages.map((msg) => (
-                    <div key={msg.id} className={`flex ${msg.sender === 'USER' ? 'justify-start' : 'justify-end'}`}>
-                        <div className={`max-w-[70%] rounded-lg p-3 text-sm shadow-sm ${msg.sender === 'USER'
-                            ? 'bg-muted text-foreground'
-                            : 'bg-primary text-primary-foreground'
-                            }`}>
-                            <div className="whitespace-pre-wrap">{msg.text}</div>
-                            <div className="text-[10px] opacity-70 text-right mt-1">
-                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {dialogue.messages && dialogue.messages.map((msg) => {
+                    if (msg.status === 'DRAFT') {
+                        return (
+                            <DraftMessage
+                                key={msg.id}
+                                message={msg}
+                                onSend={actions.confirmDraft}
+                                onRegenerate={async (id) => {
+                                    await actions.deleteMessage(id);
+                                    actions.regenerateResponse(dialogue.id);
+                                }}
+                                onDelete={actions.deleteMessage}
+                            />
+                        );
+                    }
+                    return (
+                        <div key={msg.id} className={`flex ${msg.sender === 'USER' ? 'justify-start' : 'justify-end'}`}>
+                            <div className={`max-w-[70%] rounded-lg p-3 text-sm shadow-sm ${msg.sender === 'USER'
+                                ? 'bg-muted text-foreground'
+                                : 'bg-primary text-primary-foreground'
+                                }`}>
+                                <div className="whitespace-pre-wrap">{msg.text}</div>
+                                <div className="text-[10px] opacity-70 text-right mt-1">
+                                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
                 {(!dialogue.messages || dialogue.messages.length === 0) && (
                     <div className="text-center text-muted-foreground text-sm my-10">No messages yet.</div>
                 )}

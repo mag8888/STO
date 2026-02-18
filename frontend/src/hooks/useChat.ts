@@ -191,25 +191,50 @@ export const useChat = () => {
         } finally {
             setLoading(false);
         }
-    };
+        const confirmDraft = async (messageId: number, text: string) => {
+            try {
+                const res = await fetch(`/messages/${messageId}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text })
+                });
+                if (!res.ok) throw new Error('Failed to send draft');
+                if (currentDialogue) await selectChat(currentDialogue.id);
+                loadDialogues(true);
+            } catch (e) {
+                console.error(e);
+                alert('Failed to send draft');
+            }
+        };
 
-    return {
-        dialogues: filteredDialogues,
-        currentDialogue,
-        selectChat,
-        loadDialogues,
-        syncChats,
-        sendMessage,
-        updateUserStatus,
-        updateDialogueSource,
-        toggleArchive,
-        filter,
-        setFilter,
-        search,
-        setSearch,
-        loading,
-        showRejected,
-        setShowRejected,
-        regenerateResponse,
+        const deleteMessage = async (messageId: number) => {
+            try {
+                await fetch(`/messages/${messageId}`, { method: 'DELETE' });
+                if (currentDialogue) await selectChat(currentDialogue.id);
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        return {
+            dialogues: filteredDialogues,
+            currentDialogue,
+            selectChat,
+            loadDialogues,
+            syncChats,
+            sendMessage,
+            confirmDraft,
+            deleteMessage,
+            updateUserStatus,
+            updateDialogueSource,
+            toggleArchive,
+            filter,
+            setFilter,
+            search,
+            setSearch,
+            loading,
+            showRejected,
+            setShowRejected,
+            regenerateResponse,
+        };
     };
-};
