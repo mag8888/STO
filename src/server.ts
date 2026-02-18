@@ -753,40 +753,34 @@ fastify.get('/scout/chats/:username/leads', async (req, reply) => {
 fastify.post('/scout/analyze', async (req, reply) => {
     const { text, user } = req.body as { text: string, user: any };
     try {
-        // Construct a prompt for GPT
-        const prompt = `
-        Analyze this Telegram message for a CRM profile.
+        // 1. Fetch Context (Rules & Knowledge Base)
+        const rules = await prisma.rule.findMany({
+            where: { isActive: true, isGlobal: true }
+        });
+
+        const kbItems = await prisma.knowledgeItem.findMany();
+
+        const kbContext = [
+            ...rules.map(r => `[RULE]: ${r.content}`),
+            ...kbItems.map(k => `[Q]: ${k.question}\n[A]: ${k.answer}`)
+        ].join('\n\n');
+
+        const userContext = `
         Message: "${text}"
         Sender: ${user.firstName} ${user.lastName || ''} (@${user.username})
-
-        1. Extract profile fields: city, activity (niche), currentIncome, desiredIncome, requests, hobbies, bestClients, businessCard (summary).
-        2. Draft a polite, short, and engaging first message to this person. The goal is networking. 
-           Start with context ("Saw your message about...").
-           
-        Return JSON: { "profile": {...}, "draft": "..." }
         `;
 
-        // Reuse generateResponse or call GPT directly? 
-        // generateResponse is tied to Dialogue history. We need a simpler 'one-off' generation.
-        // Let's create a helper or reuse generateResponse logic but without history?
-        // For speed, let's just make a new simple call if possible, or adapt generateResponse.
-        // Actually, let's use a simplified call here.
-        // We need to import 'openai' or similar if not exposed.
-        // `generateResponse` uses `openai` instance internally. 
-        // Let's assume we can mock a dialogue history of 1 message and use generateResponse? 
-        // No, that updates DB. 
+        // 2. Call AI
+        const result = await analyzeText(text, userContext, kbContext);
 
-        // TEMPORARY: Return a mock or basic extraction until we expose a pure GPT helper.
-        // Or better: Let's just use the 'instructions' param of generateResponse with a fake history.
-
-        // Better: Export 'analyzeText' from gpt.ts.
-        // For now, let's just return a placeholder to verify connectivity.
-        return {
-            profile: { activity: "Detected Activity" },
-            draft: `Hi ${user.firstName}, saw your post about ${text.substring(0, 10)}... let's connect!`
-        };
+        if (result) {
+            return result;
+        } else {
+            return reply.code(500).send({ error: 'AI Analysis failed to return data' });
+        }
     } catch (e) {
-        return reply.code(500).send({ error: 'AI Analysis failed' });
+        req.log.error(e);
+        return reply.code(500).send({ error: 'AI Analysis exception' });
     }
 });
 

@@ -155,7 +155,11 @@ OUTPUT FORMAT(JSON):
 }
 // ... (Existing generateResponse)
 
-export async function analyzeText(text: string, userContext: string): Promise<{ profile: any, draft: string } | null> {
+export async function analyzeText(
+    text: string,
+    userContext: string,
+    kbContext: string = ''
+): Promise<{ profile: any, draft: string } | null> {
     try {
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) return null;
@@ -163,32 +167,35 @@ export async function analyzeText(text: string, userContext: string): Promise<{ 
         const openai = new OpenAI({ apiKey });
 
         const systemPrompt = `
-        You are an expert CRM analyst and networker.
-        Your goal is to analyze a message from a potential lead in a Telegram chat and extract their professional profile.
-        
+        You are an expert Networker and CRM Analyst.
+        Your goal is to analyze a message from a Telegram chat and draft a high-quality, human-like reply.
+
         CONTEXT:
         ${userContext}
-        
+
+        KNOWLEDGE BASE (Use this to answer questions or describe services):
+        ${kbContext}
+
         TASK:
-        1. Extract specific profile fields (if mentioned): 
-           - city
-           - activity (niche/role)
-           - currentIncome
-           - desiredIncome
-           - requests (what they need)
-           - hobbies
-           - bestClients
-           - businessCard (a summary of who they are)
-           
-        2. Draft a SHORT, CASUAL, and POLITE first message to start a conversation with them.
-           - Mention what they wrote about. (Contextualize)
-           - Do not be salesy. Just "networking".
-           - Language: Russian (implied by context).
-           
+        1. **Detect Language**: Determine if the user's message is in Russian or English. **You MUST reply in the SAME language.**
+        2. **Analyze Intent**:
+           - Is the user asking for help ("Need", "Looking for")? -> Offer help using KB.
+           - Is the user offering something ("I am a dev")? -> Ask relevant qualifying questions.
+        3. **Draft a Message**:
+           - **NO "Let's connect"**. No spammy intros.
+           - Be casual, specific, and brief (1-2 sentences).
+           - Refer to specific details using the user's text (e.g., "Saw you're looking for a designer...").
+           - If KB has a relevant answer/offer, use it naturally.
+
         OUTPUT JSON:
         {
-          "profile": { "city": "...", "activity": "...", ... },
-          "draft": "Hi [Name], saw your post about..."
+          "profile": { 
+              "city": "...", 
+              "activity": "...", 
+              "requests": "...", 
+              "businessCard": "..." 
+          },
+          "draft": "Your drafted message here..."
         }
         `;
 
@@ -210,6 +217,6 @@ export async function analyzeText(text: string, userContext: string): Promise<{ 
 
     } catch (e) {
         console.error('[GPT] Analysis failed:', e);
-        return null;
+        return null; // Fallback to null (or we could return a safe default)
     }
 }
