@@ -96,7 +96,9 @@ fastify.get('/dialogues', async (req, reply) => {
         const dialogues = await prisma.dialogue.findMany({
             where: { status: 'ACTIVE' },
             include: {
-                user: true,
+                user: {
+                    include: { sourceChat: true }
+                },
                 messages: {
                     orderBy: { id: 'desc' },
                     take: 1

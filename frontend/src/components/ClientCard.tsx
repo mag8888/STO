@@ -1,6 +1,6 @@
 import React from 'react';
 import type { User } from '../types';
-import { X, Briefcase, MapPin, DollarSign, Target, Heart } from 'lucide-react';
+import { X, Briefcase, MapPin, DollarSign, Target, Heart, Award, Link as LinkIcon } from 'lucide-react';
 
 interface ClientCardProps {
     user: User;
@@ -44,6 +44,23 @@ const ClientCard: React.FC<ClientCardProps> = ({ user, onClose }) => {
                         <InfoItem icon={DollarSign} label="Income" value={user.currentIncome ? `${user.currentIncome} (Goal: ${user.desiredIncome})` : user.desiredIncome ? `Goal: ${user.desiredIncome}` : null} />
                         <InfoItem icon={Target} label="Requests" value={user.requests} />
                         <InfoItem icon={Heart} label="Hobbies" value={user.hobbies} />
+                        <InfoItem icon={Award} label="Best Clients" value={user.bestClients} />
+
+                        {/* Source Info */}
+                        {user.sourceChat && (
+                            <div className="flex items-start gap-3 bg-blue-500/5 p-2 rounded">
+                                <LinkIcon className="h-5 w-5 text-blue-500 mt-0.5" />
+                                <div>
+                                    <div className="text-xs font-medium text-blue-500 uppercase">Source / Inviter</div>
+                                    <div className="text-sm font-medium">{user.sourceChat.title || 'Unknown Source'}</div>
+                                    {user.sourceChat.link && (
+                                        <a href={user.sourceChat.link} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate block max-w-[200px]">
+                                            {user.sourceChat.link}
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Business Card / Bio */}
                         {user.businessCard && (

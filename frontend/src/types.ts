@@ -64,6 +64,10 @@ export interface User {
     hobbies?: string;
     bestClients?: string;
     businessCard?: string;
+    sourceChat?: {
+        title: string | null;
+        link: string | null;
+    };
 }
 
 export interface Message {
