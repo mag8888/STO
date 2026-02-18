@@ -55,6 +55,15 @@ export interface User {
     sourceChatId?: number;
     createdAt: string;
     updatedAt: string;
+    // Profile Fields
+    city?: string;
+    activity?: string;
+    currentIncome?: string;
+    desiredIncome?: string;
+    requests?: string;
+    hobbies?: string;
+    bestClients?: string;
+    businessCard?: string;
 }
 
 export interface Message {

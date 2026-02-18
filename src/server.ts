@@ -626,6 +626,16 @@ fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
         );
 
         if (gptResult) {
+            // Save extracted profile data if present
+            if (gptResult.extractedProfile && Object.keys(gptResult.extractedProfile).length > 0) {
+                console.log('[GPT] Saving extracted profile:', gptResult.extractedProfile);
+                const { id, ...profileData } = gptResult.extractedProfile as any;
+                await prisma.user.update({
+                    where: { id: dialogue.userId },
+                    data: profileData
+                });
+            }
+
             await createDraftMessage(dialogue.id, gptResult.reply);
             return { success: true };
         } else {

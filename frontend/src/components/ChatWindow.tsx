@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import type { Dialogue } from '../types';
 import { useChat } from '../hooks/useChat';
-import { Send, Archive, ShieldAlert, UserCheck, ArrowRightLeft } from 'lucide-react';
+import ClientCard from './ClientCard';
+import { Send, Archive, ShieldAlert, UserCheck, ArrowRightLeft, CreditCard } from 'lucide-react';
 
 interface ChatWindowProps {
     dialogue: Dialogue | null;
@@ -10,6 +11,7 @@ interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
     const [input, setInput] = useState('');
+    const [showClientCard, setShowClientCard] = useState(false);
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -57,6 +59,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
                     </h2>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>ID: {dialogue.user.telegramId}</span>
+                        <button onClick={() => setShowClientCard(true)} className="text-primary hover:underline ml-2 flex items-center gap-1">
+                            <CreditCard className="w-3 h-3" /> Profile
+                        </button>
                     </div>
                 </div>
                 <div className="flex gap-2">
@@ -167,6 +172,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
                     </button>
                 </div>
             </div>
+            {showClientCard && dialogue && (
+                <ClientCard user={dialogue.user} onClose={() => setShowClientCard(false)} />
+            )}
         </div>
     );
 };
