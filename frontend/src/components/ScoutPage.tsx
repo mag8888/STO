@@ -38,6 +38,7 @@ const ScoutPage = () => {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [scanning, setScanning] = useState(false);
     const [scanLimit, setScanLimit] = useState(50);
+    const [scanKeywords, setScanKeywords] = useState('');
 
     // const [chats, setChats] = useState<any[]>([]); // Removed internal sidebar logic
 
@@ -53,7 +54,7 @@ const ScoutPage = () => {
         setScanning(true);
         setLeads([]);
         try {
-            const data = await scanChat(chatUsername, scanLimit);
+            const data = await scanChat(chatUsername, scanLimit, scanKeywords);
             setLeads(data.leads);
         } catch (e) {
             console.error(e);
@@ -213,6 +214,16 @@ const ScoutPage = () => {
                             onChange={(e) => setScanLimit(Number(e.target.value))}
                             min={10}
                             max={500}
+                        />
+                    </div>
+                    <div className="flex items-center gap-1 bg-background border rounded px-2 py-1 w-64">
+                        <span className="text-xs text-muted-foreground">Keywords:</span>
+                        <input
+                            type="text"
+                            className="w-full text-sm bg-transparent focus:outline-none"
+                            value={scanKeywords}
+                            onChange={(e) => setScanKeywords(e.target.value)}
+                            placeholder="default (i.e. 'need, offer')"
                         />
                     </div>
                     <button

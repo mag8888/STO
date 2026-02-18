@@ -221,7 +221,7 @@ export async function startDialogue(page: any, username: string) { }
 
 // --- Scouting ---
 // --- Scouting ---
-export async function scanChatForLeads(chatUsername: string, limit: number = 50) {
+export async function scanChatForLeads(chatUsername: string, limit: number = 50, customKeywords?: string[]) {
     console.log(`[Scout] Scanning ${chatUsername} for leads (limit: ${limit})...`);
     const client = getClient();
     if (!client || !client.connected) throw new Error('Client not connected');
@@ -231,7 +231,7 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
         const leads: any[] = [];
 
         // Broader Networking Keywords
-        const keywords = [
+        const defaultKeywords = [
             // Requests
             'ищу', 'нужен', 'надо', 'подскажите', 'куплю', 'заказать', 'help', 'need', 'want', 'клиент', 'трафик',
             // Offers / Intros
@@ -239,6 +239,9 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
             // Context
             'сотрудничество', 'партнерство', 'нетворкинг', 'знакомство', 'бизнес'
         ];
+
+        // If custom keywords provided, use them. Otherwise default.
+        const keywords = (customKeywords && customKeywords.length > 0) ? customKeywords.map(k => k.toLowerCase()) : defaultKeywords;
 
         // Fetch admins to check statuses (optimization: fetch once)
         // Note: getting participants might be restricted in some channels/groups.

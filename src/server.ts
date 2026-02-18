@@ -738,11 +738,13 @@ fastify.post('/scout/chats', async (req, reply) => {
 // Get leads from a chat (Live Scan)
 fastify.get('/scout/chats/:username/leads', async (req, reply) => {
     const { username } = req.params as { username: string };
-    const { limit } = req.query as { limit?: string };
+    const { limit, keywords } = req.query as { limit?: string, keywords?: string };
     const scanLimit = limit ? parseInt(limit) : 50;
+    const customKeywords = keywords ? keywords.split(',').map(k => k.trim()).filter(k => k.length > 0) : undefined;
+
     try {
         // scanChatForLeads handles the logic
-        const leads = await scanChatForLeads(username, scanLimit);
+        const leads = await scanChatForLeads(username, scanLimit, customKeywords);
         return { leads };
     } catch (e: any) {
         req.log.error(e);
