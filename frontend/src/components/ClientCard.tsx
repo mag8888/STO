@@ -1,5 +1,5 @@
 import React from 'react';
-import { User } from '../types';
+import type { User } from '../types';
 import { X, Briefcase, MapPin, DollarSign, Target, Heart } from 'lucide-react';
 
 interface ClientCardProps {
@@ -30,7 +30,7 @@ const ClientCard: React.FC<ClientCardProps> = ({ user, onClose }) => {
                             <h2 className="text-xl font-bold">{user.firstName} {user.lastName}</h2>
                             <p className="text-sm text-muted-foreground">@{user.username || 'No username'}</p>
                             <span className={`text-xs px-2 py-0.5 rounded-full mt-1 inline-block ${user.status === 'LEAD' ? 'bg-orange-500/10 text-orange-500' :
-                                    user.status === 'REJECTED' ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'
+                                user.status === 'REJECTED' ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'
                                 }`}>
                                 {user.status}
                             </span>
