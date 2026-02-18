@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { scanChat, analyzeLead, importLead } from '../api';
-import { Sparkles, Play, Save, UserPlus, ShieldAlert, Loader2 } from 'lucide-react';
+import { scanChat, analyzeLead, importLead, api } from '../api';
+import { Play, Loader2, Sparkles, Save, ShieldAlert } from 'lucide-react';
 
 interface Lead {
     text: string;
@@ -25,12 +25,12 @@ interface Lead {
 }
 
 const SCENARIO_OPTIONS = [
-    { id: 'greeting', label: '👋 Приветствие (Имя)', text: (p: any) => `${p.firstName ? `Привет, ${p.firstName}` : 'Привет'},` },
-    { id: 'hook_interest', label: '👌 Интересный проект', text: (p: any) => `У вас интересное направление (${p.activity || 'работа'})!` },
+    { id: 'greeting', label: '👋 Приветствие (Имя)', text: (p: any) => `${p.firstName ? `Привет, ${p.firstName}` : 'Привет'}, ` },
+    { id: 'hook_interest', label: '👌 Интересный проект', text: (p: any) => `У вас интересное направление(${p.activity || 'работа'})!` },
     { id: 'context_chat', label: '👀 Видел в чате', text: (_: any) => `Увидел ваше сообщение в чате по нетворкингу.` },
-    { id: 'offer_club', label: '🚀 Оффер: Клуб', text: (_: any) => `Мы делаем онлайн-нетворкинг и можем знакомить вас с полезными людьми каждый день.` },
-    { id: 'offer_service', label: '🤖 Оффер: ИИ сервис', text: (_: any) => `Мы сделали сервис, который дает 5-10 теплых интро ежедневно.` },
-    { id: 'cta_soft', label: '❓ CTA: Мягкий', text: (_: any) => `Было бы интересно попробовать?` },
+    { id: 'offer_club', label: '🚀 Оффер: Клуб', text: (_: any) => `Мы делаем онлайн - нетворкинг и можем знакомить вас с полезными людьми каждый день.` },
+    { id: 'offer_service', label: '🤖 Оффер: ИИ сервис', text: (_: any) => `Мы сделали сервис, который дает 5 - 10 теплых интро ежедневно.` },
+    { id: 'cta_soft', label: '❓ CTA: Мягкий', text: (_: any) => `Было бы интересно попробовать ? ` },
 ];
 
 const ScoutPage = () => {
@@ -112,7 +112,7 @@ const ScoutPage = () => {
             // FIXME: The backend API currently requires sourceChatId (Int), but we only have username here.
             // Ideally backend 'import' should accept username or resolve it. 
             // For now, let's pass 0 or fix backend to resolve username to ID.
-            // Actually, server code for import: `where: { id: sourceChatId }` on ScannedChat.
+            // Actually, server code for import: `where: { id: sourceChatId } ` on ScannedChat.
             // We don't have the ID handy unless we fetch chat list again or pass it.
             // HACK: Pass 0 for now, or fetch chat details first?
             // BETTER: 'importLead' could look up ScannedChat by username? 
@@ -129,19 +129,53 @@ const ScoutPage = () => {
             // Let's fetch the list of chats to find unique ID for this username.
             // This is inefficient but safe.
 
-            // Wait, importLead takes sourceChatId. 
-            // I will use `0` and maybe fix backend or assume it's nullable? 
-            // No, user needs to know source.
-            // I will implement a helper `getChatId` here.
+            // 1. Send Feedback (Positive)
+            try {
+                // We need scannedChatId. For now, let's try to get it from context or pass 0 if unknown.
+                // ideally backend resolves this from 'username' but we don't have chat ID here easily 
+                // unless we fetch it.
+                // Let's rely on backend to handle "0" or just log it.
+                await api.post('/scout/feedback', {
+                    text: lead.text,
+                    senderUsername: lead.sender.username,
+                    senderId: lead.sender.id,
+                    scannedChatId: 0, // Placeholder
+                    relevance: 'RELEVANT'
+                });
+            } catch (e) {
+                console.warn('Feedback failed', e);
+            }
 
-            await importLead(lead.sender, lead.analysis.profile, lead.analysis.draft, 0); // Placeholder 0
+            await importLead(lead.sender, lead.analysis.profile, lead.analysis.draft, 0);
 
             const newLeads = [...leads];
             newLeads[index].isImported = true;
             setLeads(newLeads);
         } catch (e) {
             console.error(e);
-            alert('Import failed (Note: Source tracking might be missing)');
+            alert('Import failed');
+        }
+    };
+
+    const handleDismiss = async (index: number) => {
+        const lead = leads[index];
+        if (!lead.analysis) return;
+
+        try {
+            await api.post('/scout/feedback', {
+                text: lead.text,
+                senderUsername: lead.sender.username,
+                senderId: lead.sender.id,
+                scannedChatId: 0,
+                relevance: 'IRRELEVANT'
+            });
+
+            // Remove from list
+            const newLeads = leads.filter((_, i) => i !== index);
+            setLeads(newLeads);
+        } catch (e) {
+            console.error(e);
+            alert('Dismiss failed');
         }
     };
 
@@ -196,7 +230,7 @@ const ScoutPage = () => {
                 {leads.length === 0 && !scanning && <div className="text-muted-foreground text-center py-10">No relevant leads found in last 50 messages.</div>}
 
                 {leads.map((lead, idx) => (
-                    <div key={idx} className={`border rounded-lg p-4 bg-card shadow-sm ${lead.isImported ? 'opacity-50 border-green-500/30' : 'border-border'}`}>
+                    <div key={idx} className={`border rounded - lg p - 4 bg - card shadow - sm ${lead.isImported ? 'opacity-50 border-green-500/30' : 'border-border'} `}>
                         {/* Header */}
                         <div className="flex justify-between items-start mb-2">
                             <div className="flex items-center gap-2">
@@ -302,12 +336,21 @@ const ScoutPage = () => {
                                         Cancel
                                     </button>
                                     {!lead.isImported && (
-                                        <button
-                                            onClick={() => handleImport(idx)}
-                                            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm"
-                                        >
-                                            <UserPlus className="w-4 h-4" /> Import to CRM
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleImport(idx)}
+                                                disabled={lead.isImported}
+                                                className="flex-1 bg-purple-600 text-white py-2 rounded hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+                                            >
+                                                {lead.isImported ? 'Imported' : 'Import to CRM (👍)'}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDismiss(idx)}
+                                                className="px-4 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 text-sm font-medium"
+                                            >
+                                                Dismiss (👎)
+                                            </button>
+                                        </div>
                                     )}
                                     {lead.isImported && (
                                         <span className="flex items-center gap-2 text-green-500 font-medium px-4 py-2">

@@ -158,13 +158,24 @@ OUTPUT FORMAT(JSON):
 export async function analyzeText(
     text: string,
     userContext: string,
-    kbContext: string = ''
+    kbContext: string = '',
+    examples: { positive: string[], negative: string[] } = { positive: [], negative: [] }
 ): Promise<{ profile: any, draft: string } | null> {
     try {
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) return null;
 
         const openai = new OpenAI({ apiKey });
+
+        const examplesPrompt = `
+        USER PREFERENCES (LEARNING EXAMPLES):
+        
+        👍 RELEVANT (User LIKES these):
+        ${examples.positive.map(e => `- "${e.substring(0, 100)}..."`).join('\n')}
+        
+        👎 IRRELEVANT (User DISLIKES these, DO NOT engage):
+        ${examples.negative.map(e => `- "${e.substring(0, 100)}..."`).join('\n')}
+        `;
 
         const systemPrompt = `
         You are an expert Networker and CRM Analyst.
@@ -175,6 +186,16 @@ export async function analyzeText(
 
         KNOWLEDGE BASE (Use this to answer questions or describe services):
         ${kbContext}
+        
+        ${examples.positive.length > 0 || examples.negative.length > 0 ? examplesPrompt : ''}
+
+        TASK:
+        1. **Detect Language**: Determine if the user's message is in Russian or English. **You MUST reply in the SAME language.**
+        2. **Analyze Intent**:
+           - Is the user asking for help ("Need", "Looking for")? -> Offer help using KB.
+           - Is the user offering something ("I am a dev")? -> Ask relevant qualifying questions.
+           - **FILTERING**: If the message looks like the "IRRELEVANT" examples above (e.g. spam, crypto, irrelevant ads), return a generic "Dismiss" signal or just empty draft/profile.
+           - **PRIORITY**: If the message matches "RELEVANT" patterns, prioritize a good draft.
 
         TASK:
         1. **Detect Language**: Determine if the user's message is in Russian or English. **You MUST reply in the SAME language.**

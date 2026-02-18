@@ -766,13 +766,38 @@ fastify.post('/scout/analyze', async (req, reply) => {
             ...kbItems.map(k => `[Q]: ${k.question}\n[A]: ${k.answer}`)
         ].join('\n\n');
 
+        // 1.1 Fetch Feedback Examples (In-Context Learning)
+        const relevantExamples = await prisma.scoutLead.findMany({
+            where: { relevance: 'RELEVANT' },
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: { text: true }
+        });
+
+        const irrelevantExamples = await prisma.scoutLead.findMany({
+            where: { relevance: 'IRRELEVANT' },
+            take: 5,
+            orderBy: { createdAt: 'desc' },
+            select: { text: true }
+        });
+
         const userContext = `
         Message: "${text}"
         Sender: ${user.firstName} ${user.lastName || ''} (@${user.username})
         `;
 
         // 2. Call AI
-        const result = await analyzeText(text, userContext, kbContext);
+        const result = await analyzeText(
+            text,
+            userContext,
+            kbContext,
+            // Pass examples as separate args or part of context?
+            // Let's modify analyzeText signature.
+            {
+                positive: relevantExamples.map(e => e.text),
+                negative: irrelevantExamples.map(e => e.text)
+            }
+        );
 
         if (result) {
             return result;

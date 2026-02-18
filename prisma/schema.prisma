@@ -54,6 +54,28 @@ model ScannedChat {
   lastLeadsCount Int   @default(0)
   
   users       User[]
+  leads       ScoutLead[]
+}
+
+model ScoutLead {
+  id          Int      @id @default(autoincrement())
+  scannedChatId Int
+  chat        ScannedChat @relation(fields: [scannedChatId], references: [id])
+  
+  senderUsername String?
+  senderId       String?  // Telegram ID
+  text           String
+  
+  relevance   LeadRelevance @default(UNKNOWN)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum LeadRelevance {
+  UNKNOWN
+  RELEVANT
+  IRRELEVANT
 }
 
 model Dialogue {
