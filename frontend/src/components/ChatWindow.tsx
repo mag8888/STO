@@ -13,7 +13,6 @@ interface DraftMessageProps {
 
 const DraftMessage: React.FC<DraftMessageProps> = ({ message, onSend, onRegenerate, onDelete }) => {
     const [text, setText] = useState(message.text);
-    const [isEditing, setIsEditing] = useState(false);
 
     const handleSend = () => onSend(message.id, text);
 
