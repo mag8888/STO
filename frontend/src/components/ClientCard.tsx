@@ -1,6 +1,6 @@
 import React from 'react';
 import type { User } from '../types';
-import { X, Briefcase, MapPin, DollarSign, Target, Heart, Award, Link as LinkIcon } from 'lucide-react';
+import { X, Briefcase, MapPin, DollarSign, Target, Heart, Award, Link as LinkIcon, BrainCircuit } from 'lucide-react';
 
 interface ClientCardProps {
     user: User;
@@ -45,30 +45,33 @@ const ClientCard: React.FC<ClientCardProps> = ({ user, onClose }) => {
                         <InfoItem icon={Target} label="Requests" value={user.requests} />
                         <InfoItem icon={Heart} label="Hobbies" value={user.hobbies} />
                         <InfoItem icon={Award} label="Best Clients" value={user.bestClients} />
+                        <InfoItem icon={BrainCircuit} label="AI Strategy / Goal" value={user.networkingGoal} />
 
                         {/* Source Info */}
-                        {user.sourceChat && (
-                            <div className="flex items-start gap-3 bg-blue-500/5 p-2 rounded">
-                                <LinkIcon className="h-5 w-5 text-blue-500 mt-0.5" />
-                                <div>
-                                    <div className="text-xs font-medium text-blue-500 uppercase">Source / Inviter</div>
-                                    <div className="text-sm font-medium">{user.sourceChat.title || 'Unknown Source'}</div>
-                                    {user.sourceChat.link && (
-                                        <a href={user.sourceChat.link} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate block max-w-[200px]">
-                                            {user.sourceChat.link}
-                                        </a>
-                                    )}
-                                </div>
+                        <div className="flex items-start gap-3">
+                            <LinkIcon className={`h-5 w-5 mt-0.5 ${user.sourceChat ? 'text-blue-500' : 'text-muted-foreground/30'}`} />
+                            <div>
+                                <div className="text-xs font-medium text-muted-foreground uppercase">Source / Inviter</div>
+                                {user.sourceChat ? (
+                                    <>
+                                        <div className="text-sm font-medium">{user.sourceChat.title || 'Unknown Source'}</div>
+                                        {user.sourceChat.link && (
+                                            <a href={user.sourceChat.link} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:underline truncate block max-w-[200px]">
+                                                {user.sourceChat.link}
+                                            </a>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="text-sm text-muted-foreground/50 italic">—</div>
+                                )}
                             </div>
-                        )}
+                        </div>
 
                         {/* Business Card / Bio */}
-                        {user.businessCard && (
-                            <div className="mt-2 text-sm bg-muted/50 p-3 rounded-md">
-                                <strong className="block mb-1 text-xs uppercase opacity-70">Business Card / Bio</strong>
-                                {user.businessCard}
-                            </div>
-                        )}
+                        <div className="mt-2 text-sm bg-muted/50 p-3 rounded-md">
+                            <strong className="block mb-1 text-xs uppercase opacity-70">Business Card / Bio</strong>
+                            {user.businessCard || <span className="text-muted-foreground/50 italic">—</span>}
+                        </div>
                     </div>
                 </div>
 
@@ -81,13 +84,14 @@ const ClientCard: React.FC<ClientCardProps> = ({ user, onClose }) => {
 };
 
 const InfoItem = ({ icon: Icon, label, value }: { icon: any, label: string, value?: string | null }) => {
-    if (!value) return null;
     return (
         <div className="flex items-start gap-3">
-            <Icon className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <Icon className={`h-5 w-5 mt-0.5 ${value ? 'text-muted-foreground' : 'text-muted-foreground/30'}`} />
             <div>
                 <div className="text-xs font-medium text-muted-foreground uppercase">{label}</div>
-                <div className="text-sm">{value}</div>
+                <div className={`text-sm ${value ? '' : 'text-muted-foreground/50 italic'}`}>
+                    {value || '—'}
+                </div>
             </div>
         </div>
     );

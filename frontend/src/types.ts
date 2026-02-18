@@ -68,6 +68,7 @@ export interface User {
         title: string | null;
         link: string | null;
     };
+    networkingGoal?: string;
 }
 
 export interface Message {
