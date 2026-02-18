@@ -85,13 +85,19 @@ INSTRUCTIONS:
 - If the user asks a question, answer it using the KB below or common sense.
 - ALWAYS extract any new profile data from the user's last message into the JSON output.
 - **IMPORTANT**: If the user provides a "Business Card" or long bio, try to EXTRACT as many fields as possible (City, Activity, Income, etc.) from it immediately.
+
+CRITICAL RULES:
+- **CHECK HISTORY**: Read the conversation history carefully.
+- **NO REPETITION**: Do NOT repeat questions you have already asked in the history.
+- **CONTEXT**: Build upon the user's last answer.
+
 RELEVANT KNOWLEDGE BASE:
 ${kbItems.map(i => `Q: ${i.question}\nA: ${i.answer}`).join('\n')}
 
 PERMANENT RULES:
 ${rules.join('\n')}
 
-${instructions ? `\nCUSTOM INSTRUCTIONS:\n${instructions}` : ''}
+${instructions ? `\nCUSTOM INSTRUCTIONS (HIGHEST PRIORITY):\n${instructions}` : ''}
 
 OUTPUT FORMAT(JSON):
 {

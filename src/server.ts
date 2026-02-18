@@ -588,7 +588,7 @@ fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
         const recentMessages = await prisma.message.findMany({
             where: { dialogueId: dialogue.id },
             orderBy: { id: 'desc' },
-            take: 10
+            take: 50 // Increased from 10 to 50 for better context
         });
 
         const history = recentMessages.reverse().map(m => ({
@@ -608,6 +608,9 @@ fastify.post('/dialogues/:id/regenerate', async (req, reply) => {
                 isActive: true
             }
         });
+
+        console.log(`[GPT] Fetched ${rules.length} rules for generation.`);
+
 
         const ruleStrings = rules.map(r => r.content);
 
