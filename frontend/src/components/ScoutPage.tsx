@@ -18,10 +18,20 @@ interface Lead {
     analysis?: {
         profile: any;
         draft: string;
+        selectedScenarios?: string[]; // Track selected scenarios
     };
     isAnalyzing?: boolean;
     isImported?: boolean;
 }
+
+const SCENARIO_OPTIONS = [
+    { id: 'greeting', label: '👋 Greeting (Name)', text: (p: any) => `Hi ${p.firstName || 'there'},` },
+    { id: 'hook_interest', label: '👌 Interesting Project', text: (p: any) => `You have an interesting direction with ${p.activity || 'your work'}!` },
+    { id: 'context_chat', label: '👀 Saw in Chat', text: (_: any) => `Saw your message in the networking chat.` },
+    { id: 'offer_club', label: '🚀 Offer: Networking Club', text: (_: any) => `We organize online networking and can connect you with relevant people.` },
+    { id: 'offer_service', label: '🤖 Offer: AI Service', text: (_: any) => `We built a service that provides 5-10 warm intros daily.` },
+    { id: 'cta_soft', label: '❓ CTA: Soft', text: (_: any) => `Would you be open to joining?` },
+];
 
 const ScoutPage = () => {
     const { username } = useParams();
@@ -59,7 +69,29 @@ const ScoutPage = () => {
 
         try {
             const result = await analyzeLead(lead.text, lead.sender);
-            newLeads[index].analysis = result;
+
+            // Initialize with all scenarios selected by default OR just empty manual draft?
+            // User wants flexible selection. Let's select Greeting + Context + Offer by default.
+            const defaultScenarios = ['greeting', 'context_chat', 'offer_service', 'cta_soft'];
+
+            // Helper to generate text
+            const generateDraft = (scenarios: string[], profile: any) => {
+                return scenarios
+                    .map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text(profile))
+                    .join(' ');
+            };
+
+            // If AI returned a draft, we might want to keep it or override?
+            // User request implies using checkboxes to *construct* the draft. 
+            // Let's use the Checkbox system as the PRIMARY drafter, but keep AI's "profile" extraction.
+            // We can put AI's draft in a "Custom" slot or just overwrite it with scenarios.
+            // Let's initialize with Scenarios to demonstrate the feature.
+
+            newLeads[index].analysis = {
+                ...result,
+                selectedScenarios: defaultScenarios,
+                draft: generateDraft(defaultScenarios, result.profile)
+            };
         } catch (e) {
             console.error(e);
             alert('Analysis failed');
@@ -195,8 +227,47 @@ const ScoutPage = () => {
 
                                 <div className="mb-4">
                                     <label className="text-xs text-muted-foreground uppercase font-bold mb-1 block">Draft Proposal:</label>
+
+                                    {/* Scenario Checkboxes */}
+                                    <div className="flex flex-wrap gap-2 mb-2 bg-muted/20 p-2 rounded border border-border/50">
+                                        {SCENARIO_OPTIONS.map(option => (
+                                            <label key={option.id} className="flex items-center gap-1.5 text-xs cursor-pointer select-none hover:bg-muted/50 p-1 rounded transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    className="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                                                    checked={lead.analysis?.selectedScenarios?.includes(option.id) || false}
+                                                    onChange={(e) => {
+                                                        const newLeads = [...leads];
+                                                        const analysis = newLeads[idx].analysis!;
+                                                        const Scenarios = analysis.selectedScenarios || [];
+
+                                                        let newScenarios;
+                                                        if (e.target.checked) {
+                                                            newScenarios = [...Scenarios, option.id];
+                                                            // Sort by original order to keep text logical
+                                                            newScenarios.sort((a, b) => {
+                                                                return SCENARIO_OPTIONS.findIndex(o => o.id === a) - SCENARIO_OPTIONS.findIndex(o => o.id === b);
+                                                            });
+                                                        } else {
+                                                            newScenarios = Scenarios.filter(id => id !== option.id);
+                                                        }
+
+                                                        analysis.selectedScenarios = newScenarios;
+
+                                                        // Regenerate Draft Loop
+                                                        const generateText = (ids: string[]) => ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text(analysis.profile || { firstName: lead.sender.firstName })).join(' ');
+                                                        analysis.draft = generateText(newScenarios);
+
+                                                        setLeads(newLeads);
+                                                    }}
+                                                />
+                                                {option.label}
+                                            </label>
+                                        ))}
+                                    </div>
+
                                     <textarea
-                                        className="w-full bg-background border border-purple-500/30 rounded p-2 text-sm h-20 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        className="w-full bg-background border border-purple-500/30 rounded p-2 text-sm h-24 focus:outline-none focus:ring-1 focus:ring-purple-500 font-sans"
                                         value={lead.analysis.draft}
                                         onChange={(e) => {
                                             const newLeads = [...leads];
