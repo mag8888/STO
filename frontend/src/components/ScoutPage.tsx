@@ -37,6 +37,8 @@ const ScoutPage = () => {
     const { username } = useParams();
     const [leads, setLeads] = useState<Lead[]>([]);
     const [scanning, setScanning] = useState(false);
+    const [scanLimit, setScanLimit] = useState(50);
+
     // const [chats, setChats] = useState<any[]>([]); // Removed internal sidebar logic
 
     useEffect(() => {
@@ -51,7 +53,7 @@ const ScoutPage = () => {
         setScanning(true);
         setLeads([]);
         try {
-            const data = await scanChat(chatUsername);
+            const data = await scanChat(chatUsername, scanLimit);
             setLeads(data.leads);
         } catch (e) {
             console.error(e);
@@ -167,14 +169,27 @@ const ScoutPage = () => {
                     <h2 className="text-2xl font-bold flex items-center gap-2">@{username}</h2>
                     <p className="text-sm text-muted-foreground">Found {leads.length} leads</p>
                 </div>
-                <button
-                    onClick={() => handleScan(username!)}
-                    disabled={scanning}
-                    className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2 rounded hover:bg-secondary/80 disabled:opacity-50"
-                >
-                    {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                    {scanning ? 'Scanning...' : 'Rescan'}
-                </button>
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 bg-background border rounded px-2 py-1">
+                        <span className="text-xs text-muted-foreground">Limit:</span>
+                        <input
+                            type="number"
+                            className="w-12 text-sm bg-transparent focus:outline-none"
+                            value={scanLimit}
+                            onChange={(e) => setScanLimit(Number(e.target.value))}
+                            min={10}
+                            max={500}
+                        />
+                    </div>
+                    <button
+                        onClick={() => handleScan(username!)}
+                        disabled={scanning}
+                        className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2 rounded hover:bg-secondary/80 disabled:opacity-50"
+                    >
+                        {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                        {scanning ? 'Scanning...' : 'Rescan'}
+                    </button>
+                </div>
             </div>
 
             <div className="space-y-6 max-w-3xl mx-auto w-full">

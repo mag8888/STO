@@ -259,31 +259,35 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50)
                 if (!sender) continue;
 
                 // Attempt to detect Admin
-                // In GramJS/TL, ChannelParticipantAdmin or Creator has rights.
-                // However, fetching participant info for every user might be slow/rate-limited.
-                // We'll rely on what's available or try to fetch participant info if critical.
-                // For now, let's check simple flags if available, or defaulting to false.
                 let isAdmin = false;
                 try {
-                    // This is a "heavy" call if done per message. 
-                    // Optimization: In a real app, we'd cache this or fetch all admins upfront.
-                    // For now, we'll try to peek at the participant record if possible, or just skip.
-                    // Actually, 'sender' object usually doesn't have admin info relative to chat. 
-                    // We need 'getPermissions' or 'getParticipant'.
-                    // Let's try to fetch participant info for this specific user in this specific chat.
-                    const participant = await client.invoke(
-                        new Api.channels.GetParticipant({
-                            channel: chatUsername,
-                            participant: sender.id
-                        })
-                    );
-
-                    const p = (participant as any).participant;
-                    if (p && (p.className === 'ChannelParticipantAdmin' || p.className === 'ChannelParticipantCreator')) {
+                    // 1. Check if the message is from the linked channel (in Discussion Groups)
+                    // If msg.sender_id matches the chat's channel_id, it's an admin post.
+                    // This is common in "Channel Discussion" groups.
+                    if (sender.className === 'Channel' || sender.className === 'Chat') {
                         isAdmin = true;
                     }
+
+                    // 2. Explicit Participant Check (if not already found)
+                    if (!isAdmin) {
+                        const participant = await client.invoke(
+                            new Api.channels.GetParticipant({
+                                channel: chatUsername,
+                                participant: sender.id
+                            })
+                        );
+
+                        const p = (participant as any).participant;
+                        // Check for Admin or Creator
+                        if (p && (
+                            p.className === 'ChannelParticipantAdmin' ||
+                            p.className === 'ChannelParticipantCreator' ||
+                            (p.adminRights && p.adminRights.className !== 'ChatAdminRightsNone') // Extended check
+                        )) {
+                            isAdmin = true;
+                        }
+                    }
                 } catch (e) {
-                    // Fails if not a channel/supergroup or no permissions to view participants
                     // console.log('Checking admin failed:', e);
                 }
 

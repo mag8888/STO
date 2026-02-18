@@ -738,10 +738,11 @@ fastify.post('/scout/chats', async (req, reply) => {
 // Get leads from a chat (Live Scan)
 fastify.get('/scout/chats/:username/leads', async (req, reply) => {
     const { username } = req.params as { username: string };
-    const limit = 50; // hardcoded for now
+    const { limit } = req.query as { limit?: string };
+    const scanLimit = limit ? parseInt(limit) : 50;
     try {
         // scanChatForLeads handles the logic
-        const leads = await scanChatForLeads(username, limit);
+        const leads = await scanChatForLeads(username, scanLimit);
         return { leads };
     } catch (e: any) {
         req.log.error(e);
