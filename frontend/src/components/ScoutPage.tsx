@@ -25,12 +25,12 @@ interface Lead {
 }
 
 const SCENARIO_OPTIONS = [
-    { id: 'greeting', label: '👋 Greeting (Name)', text: (p: any) => `Hi ${p.firstName || 'there'},` },
-    { id: 'hook_interest', label: '👌 Interesting Project', text: (p: any) => `You have an interesting direction with ${p.activity || 'your work'}!` },
-    { id: 'context_chat', label: '👀 Saw in Chat', text: (_: any) => `Saw your message in the networking chat.` },
-    { id: 'offer_club', label: '🚀 Offer: Networking Club', text: (_: any) => `We organize online networking and can connect you with relevant people.` },
-    { id: 'offer_service', label: '🤖 Offer: AI Service', text: (_: any) => `We built a service that provides 5-10 warm intros daily.` },
-    { id: 'cta_soft', label: '❓ CTA: Soft', text: (_: any) => `Would you be open to joining?` },
+    { id: 'greeting', label: '👋 Приветствие (Имя)', text: (p: any) => `${p.firstName ? `Привет, ${p.firstName}` : 'Привет'},` },
+    { id: 'hook_interest', label: '👌 Интересный проект', text: (p: any) => `У вас интересное направление (${p.activity || 'работа'})!` },
+    { id: 'context_chat', label: '👀 Видел в чате', text: (_: any) => `Увидел ваше сообщение в чате по нетворкингу.` },
+    { id: 'offer_club', label: '🚀 Оффер: Клуб', text: (_: any) => `Мы делаем онлайн-нетворкинг и можем знакомить вас с полезными людьми каждый день.` },
+    { id: 'offer_service', label: '🤖 Оффер: ИИ сервис', text: (_: any) => `Мы сделали сервис, который дает 5-10 теплых интро ежедневно.` },
+    { id: 'cta_soft', label: '❓ CTA: Мягкий', text: (_: any) => `Было бы интересно попробовать?` },
 ];
 
 const ScoutPage = () => {
