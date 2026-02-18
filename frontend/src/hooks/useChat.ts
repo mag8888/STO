@@ -122,6 +122,7 @@ export const useChat = () => {
                 body: JSON.stringify({ dialogueId, message: text })
             });
             await selectChat(dialogueId);
+            loadDialogues(true); // Refresh list to update sort order
         } catch (e) {
             console.error(e);
             alert('Failed to send message');
@@ -169,14 +170,21 @@ export const useChat = () => {
     };
 
     const regenerateResponse = async (dialogueId: number, instructions?: string) => {
+        console.log(`[Frontend] regenerateResponse called for Dialogue ${dialogueId}`);
         try {
             setLoading(true);
-            await fetch(`/dialogues/${dialogueId}/regenerate`, {
+            const res = await fetch(`/dialogues/${dialogueId}/regenerate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ instructions })
             });
+            if (!res.ok) {
+                const err = await res.json();
+                console.error('[Frontend] Regeneration failed:', err);
+                throw new Error(err.error || 'Failed');
+            }
             await selectChat(dialogueId);
+            loadDialogues(true); // Refresh list
         } catch (e) {
             console.error(e);
             alert('Failed to regenerate response');
