@@ -145,25 +145,46 @@ export async function sendDraftMessage(page: any, messageId: number, customText?
     }
 }
 
-export async function sendMessageToUser(page: any, username: string, text: string) {
-    console.log(`[Msg] Sending direct message to @${username}...`);
-
-    // 1. Ensure User exists in DB first
-    const { dialogue } = await ensureUserAndDialogue(username, username);
-
+// Refactored to use userId and GramJS directly
+export async function sendMessageToUser(userId: number, text: string) {
+    console.log(`[ACTION] sendMessageToUser called for userId: ${userId}`);
     const client = getClient();
     if (!client || !client.connected) {
-        console.error('[Msg] Client not connected. Cannot send.');
-        throw new Error('Client not connected');
+        console.error('[ACTION] Client not connected');
+        throw new Error('Telegram client not connected');
     }
 
     try {
-        await client.sendMessage(username, { message: text });
-        console.log(`[Msg] Successfully sent to @${username}`);
-        await saveMessageToDb(dialogue.id, 'SIMULATOR', text, 'SENT');
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw new Error(`User ID ${userId} not found`);
+        console.log(`[ACTION] Found user in DB: ${user.telegramId} (@${user.username})`);
+
+        // 1. Create Message Record First (Optimistic)
+        // Find dialogue ID
+        const dialogue = await prisma.dialogue.findFirst({ where: { userId } });
+        const dialogueId = dialogue?.id || 0;
+
+        const msg = await prisma.message.create({
+            data: {
+                dialogueId,
+                sender: 'OPERATOR',
+                text,
+                status: 'SENT'
+            }
+        });
+        console.log(`[ACTION] Created DB message: ${msg.id}`);
+
+        // 2. Send via GramJS
+        // Use telegramId (string) or username
+        const target = user.telegramId;
+        console.log(`[ACTION] Sending via GramJS to ${target}...`);
+
+        await client.sendMessage(target, { message: text });
+        console.log(`[ACTION] GramJS send successful`);
+
+        return msg;
     } catch (e: any) {
-        console.error(`[Msg] Failed to send via Telegram: ${e.message}`);
-        // Optional: Save as FAILED? For now just throw so UI knows.
+        console.error('[ACTION] Failed to send message:', e);
         throw e;
     }
 }

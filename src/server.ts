@@ -261,14 +261,24 @@ fastify.get('/status', async (request, reply) => {
 });
 
 fastify.post('/send', async (request, reply) => {
-    const { username, message } = request.body as { username: string, message: string };
-    if (!username || !message) return reply.code(400).send({ error: 'Missing fields' });
+    // Frontend sends { dialogueId, message }
+    const { dialogueId, message } = request.body as { dialogueId: number, message: string };
+
+    // Support legacy { username, message } if needed? No, frontend uses dialogueId.
+    if (!dialogueId || !message) return reply.code(400).send({ error: 'Missing fields (dialogueId, message)' });
 
     try {
-        // page is null
-        await sendMessageToUser(null, username, message);
+        const dialogue = await prisma.dialogue.findUnique({
+            where: { id: dialogueId },
+            include: { user: true }
+        });
+
+        if (!dialogue) return reply.code(404).send({ error: 'Dialogue not found' });
+
+        await sendMessageToUser(dialogue.userId, message);
         return { success: true };
     } catch (e: any) {
+        request.log.error(e);
         return reply.code(500).send({ error: e.message });
     }
 });
