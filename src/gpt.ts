@@ -116,21 +116,27 @@ OUTPUT FORMAT(JSON):
             }))
         ];
 
-        console.log(`[GPT] Sending request...`);
+        console.log(`[GPT] Sending request to OpenAI (Model: gpt-4o)...`);
+        // console.log(`[GPT] System Prompt:`, systemPrompt); // Too verbose?
         const completion = await openai.chat.completions.create({
-            messages: messages,
+            messages: messages as any,
             model: 'gpt-4o',
             temperature: 0.7,
             response_format: { type: 'json_object' }
         });
 
         const content = completion.choices[0].message.content;
-        if (!content) return null;
+        console.log(`[GPT] Received response:`, content?.substring(0, 100) + '...');
+
+        if (!content) {
+            console.error('[GPT] Response content is empty!');
+            return null;
+        }
 
         const jsonStr = content.replace(/```json\n ?| ```/g, '').trim();
         return JSON.parse(jsonStr);
     } catch (e: any) {
-        console.error('[GPT] Error:', e);
+        console.error('[GPT] Error generating response:', e);
         return null;
     }
 }

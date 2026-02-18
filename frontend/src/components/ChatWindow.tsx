@@ -10,6 +10,15 @@ interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
     const [input, setInput] = useState('');
+    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    React.useEffect(() => {
+        scrollToBottom();
+    }, [dialogue?.messages]);
 
     if (!dialogue) {
         return (
@@ -97,7 +106,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
+                <div className="flex-1" /> {/* Spacer to push messages down if few */}
                 {dialogue.messages && dialogue.messages.map((msg) => (
                     <div key={msg.id} className={`flex ${msg.sender === 'USER' ? 'justify-start' : 'justify-end'}`}>
                         <div className={`max-w-[70%] rounded-lg p-3 text-sm shadow-sm ${msg.sender === 'USER'
@@ -114,6 +124,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ dialogue, actions }) => {
                 {(!dialogue.messages || dialogue.messages.length === 0) && (
                     <div className="text-center text-muted-foreground text-sm my-10">No messages yet.</div>
                 )}
+                <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
