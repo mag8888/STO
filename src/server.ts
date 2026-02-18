@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { Api } from 'telegram';
 console.log('[BOOT] Server script loaded. Importing dependencies...');
 import Fastify from 'fastify';
 import path from 'path';
@@ -668,24 +669,72 @@ fastify.post('/scout/chats', async (req, reply) => {
         const client = getClient();
         if (!client || !client.connected) return reply.code(503).send({ error: 'Telegram client not connected' });
 
-        // Resolve entity to get basic info
-        const entity = await client.getEntity(link);
-        const title = (entity as any).title || (entity as any).username || link;
-        const username = (entity as any).username || null;
+        let entity: any;
+        let title: string = link;
+        let username: string | null = null;
+        let id: string | null = null;
 
-        // TODO: Handle numeric IDs if username is missing?
+        // Check for invite link
+        const inviteMatch = link.match(/(?:t\.me\/|telegram\.me\/)(?:\+|joinchat\/)([\w-]+)/);
+
+        if (inviteMatch) {
+            const hash = inviteMatch[1];
+            console.log(`[Scout] Detected invite link with hash: ${hash}`);
+
+            try {
+                // Check invite first
+                const check = await client.invoke(new Api.messages.CheckChatInvite({ hash }));
+                console.log('[Scout] CheckChatInvite result:', check.className);
+
+                if (check.className === 'ChatInviteAlready') {
+                    // Already joined, get entity from chat
+                    entity = (check as any).chat;
+                } else {
+                    // Need to join
+                    const updates = await client.invoke(new Api.messages.ImportChatInvite({ hash }));
+                    // updates.chats should contain the joined chat
+                    if (updates.chats && updates.chats.length > 0) {
+                        entity = updates.chats[0];
+                    }
+                }
+            } catch (e: any) {
+                if (e.message && e.message.includes('USER_ALREADY_PARTICIPANT')) {
+                    // We are already participant but CheckChatInvite returned something else?
+                    // Try to resolve via GetEntity if possible, but with hash it's tricky.
+                    // Actually CheckChatInvite returns 'ChatInviteAlready' if joined.
+                    // Unlikely to error with USER_ALREADY_PARTICIPANT on CheckChatInvite.
+                    // ImportChatInvite might error.
+                    console.log('[Scout] Already participant (error caught)');
+                } else {
+                    throw e;
+                }
+            }
+        } else {
+            // Standard username/link
+            entity = await client.getEntity(link);
+        }
+
+        if (entity) {
+            title = entity.title || entity.username || link;
+            username = entity.username || null;
+            id = entity.id.toString();
+        } else {
+            // Fallback if entity resolution failed but we caught error?
+            // Or if ImportChatInvite didn't return chats.
+            throw new Error('Could not resolve chat entity.');
+        }
 
         const chat = await prisma.scannedChat.create({
             data: {
                 link,
                 title,
-                username: username || link // Fallback if no username
+                username: username || id || link // Use ID if no username
             }
         });
         return chat;
-    } catch (e) {
+    } catch (e: any) {
         req.log.error(e);
-        return reply.code(500).send({ error: 'Failed to add chat. Ensure bot has access.' });
+        return reply.code(500).send({ error: `Failed to add chat: ${e.message}` });
     }
 });
 
