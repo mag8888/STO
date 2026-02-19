@@ -50,6 +50,7 @@ model ScannedChat {
   username    String?
   title       String? // Chat title
   link        String? // Original link used
+  accessHash  String? // For resolving by ID
   scannedAt   DateTime @default(now())
   lastLeadsCount Int   @default(0)
   

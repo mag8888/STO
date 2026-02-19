@@ -221,13 +221,40 @@ export async function startDialogue(page: any, username: string) { }
 
 // --- Scouting ---
 // --- Scouting ---
-export async function scanChatForLeads(chatUsername: string, limit: number = 50, customKeywords?: string[]) {
+export async function scanChatForLeads(chatUsername: string, limit: number = 50, customKeywords?: string[], accessHash?: string) {
     console.log(`[Scout] Scanning ${chatUsername} for leads (limit: ${limit})...`);
     const client = getClient();
     if (!client || !client.connected) throw new Error('Client not connected');
 
     try {
-        const messages = await client.getMessages(chatUsername, { limit: limit });
+        let inputPeer: any = chatUsername;
+
+        // Check if chatUsername is a numeric ID (as string)
+        if (/^-?\d+$/.test(chatUsername)) {
+            try {
+                // If accessHash is provided, construct InputPeer
+                // Usually for channels/megagroups
+                if (accessHash) {
+                    const id = BigInt(chatUsername);
+                    const hash = BigInt(accessHash);
+                    // Try Channel first (most likely for scout)
+                    inputPeer = new Api.InputPeerChannel({
+                        channelId: id as any,
+                        accessHash: hash as any
+                    });
+                    // Maybe also InputPeerUser if it's a user? But scout is usually groups.
+                    // If it fails, we might need to know if it's a Chat or Channel.
+                    // For now assume Channel/Supergroup.
+                } else {
+                    // Try simple ID if possible (might fail if not in cache)
+                    inputPeer = BigInt(chatUsername);
+                }
+            } catch (e) {
+                console.warn(`[Scout] Could not convert ${chatUsername} to BigInt/InputPeer.`);
+            }
+        }
+
+        const messages = await client.getMessages(inputPeer, { limit: limit });
         const leads: any[] = [];
 
         // Broader Networking Keywords

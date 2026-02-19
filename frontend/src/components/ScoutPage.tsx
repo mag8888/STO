@@ -61,7 +61,9 @@ const ScoutPage = () => {
             setLeads(data.leads);
         } catch (e) {
             console.error(e);
-            alert('Scan failed');
+        } catch (e: any) {
+            console.error(e);
+            alert(`Scan failed: ${e.response?.data?.error || e.message}`);
         } finally {
             setScanning(false);
         }
