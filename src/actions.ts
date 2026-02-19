@@ -227,9 +227,9 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
     if (!client || !client.connected) throw new Error('Client not connected');
 
     let messages: any[] = [];
-    try {
-        let inputPeer: any = chatUsername;
+    let inputPeer: any = chatUsername;
 
+    try {
         // Check if chatUsername is a numeric ID (as string)
         if (/^-?\d+$/.test(chatUsername)) {
             try {
@@ -243,9 +243,6 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
                         channelId: id as any,
                         accessHash: hash as any
                     });
-                    // Maybe also InputPeerUser if it's a user? But scout is usually groups.
-                    // If it fails, we might need to know if it's a Chat or Channel.
-                    // For now assume Channel/Supergroup.
                 } else {
                     // Try simple ID if possible (might fail if not in cache)
                     inputPeer = BigInt(chatUsername);
@@ -255,7 +252,32 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
             }
         }
 
-        const messages = await client.getMessages(inputPeer, { limit: limit });
+        try {
+            messages = await client.getMessages(inputPeer, { limit: limit });
+        } catch (e: any) {
+            if (e.message && e.message.includes('Could not find the input entity')) {
+                console.log(`[Scout] Entity not found in cache. Fetching dialogs to refresh...`);
+                // Refresh cache by fetching dialogs
+                await client.getDialogs({ limit: 50 }); // Fetch top 50 dialogs 
+
+                // Retry
+                try {
+                    // Re-evaluate inputPeer if it was just an ID, maybe now it's cached
+                    if (typeof inputPeer === 'bigint' || typeof inputPeer === 'number' || typeof inputPeer === 'string') {
+                        const resolved = await client.getEntity(inputPeer as any);
+                        if (resolved) inputPeer = resolved;
+                    }
+                    messages = await client.getMessages(inputPeer, { limit: limit });
+                } catch (retryErr) {
+                    console.error(`[Scout] Retry failed:`, retryErr);
+                    throw new Error(`Could not resolve chat ${chatUsername}. If using an ID, ensure you are joined to the chat or use a Username/Link.`);
+                }
+            } else {
+                throw e;
+            }
+        }
+
+
         const leads: any[] = [];
 
         // Broader Networking Keywords
