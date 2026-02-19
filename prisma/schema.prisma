@@ -1,222 +1,45 @@
 generator client {
   provider = "prisma-client-js"
-  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
-//   extensions = [vector]
 }
 
-model User {
+model ServiceStation {
   id        Int      @id @default(autoincrement())
-  telegramId String  @unique // User ID or username if ID unknown
-  username  String?
-  firstName String?
-  lastName  String?
-  accessHash String? // For users without username (by ID)
-  bio       String?
-  status    UserStatus @default(LEAD)
-  tags      Json?    // Stored as JSON array of strings
-  facts     Json?    // Stored as JSON object: { occupation: "...", country: "...", ... }
+  chatId    BigInt   @unique
+  name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  dialogues Dialogue[]
-  
-  // Source Tracking
-  sourceChatId Int?
-  sourceChat   ScannedChat? @relation(fields: [sourceChatId], references: [id])
-  revenue      Float    @default(0.0)
-
-  // Profile Fields (Networking Assistant)
-  city            String?
-  activity        String?  // Sphere of activity
-  businessCard    String?  // Raw text of business card/bio
-  bestClients     String?  // Description of best clients
-  requests        String?  // Common requests/tasks
-  hobbies         String?
-  currentIncome   String?  // Flexible string for range/value
-  desiredIncome   String?
-  networkingGoal  String?  // Context/Goal
-  profileStatus   ProfileStatus @default(EMPTY)
-
-  rules        Rule[]
+  Batches   OrderBatch[]
 }
 
-model ScannedChat {
-  id          Int      @id @default(autoincrement())
-  username    String?
-  title       String? // Chat title
-  link        String? // Original link used
-  accessHash  String? // For resolving by ID
-  scannedAt   DateTime @default(now())
-  lastLeadsCount Int   @default(0)
-  
-  users       User[]
-  leads       ScoutLead[]
-  scanHistory ScanHistory[]
+model OrderBatch {
+  id               Int      @id @default(autoincrement())
+  serviceStationId Int
+  serviceStation   ServiceStation @relation(fields: [serviceStationId], references: [id])
+  weekStartDate    DateTime
+  status           String   @default("PROCESSING") // PROCESSING, NEEDS_REVIEW, APPROVED
+  rawFiles         String   // JSON string of file paths
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  Items            OrderItem[]
 }
 
-model ScanHistory {
-  id          Int      @id @default(autoincrement())
-  scannedChatId Int
-  chat        ScannedChat @relation(fields: [scannedChatId], references: [id])
-  
-  keywords    String?  // Keywords used for this scan
-  limit       Int      @default(50)
-  leads       Json     // Stored as JSON array of lead objects
-  leadsCount  Int      @default(0)
-  
-  createdAt   DateTime @default(now())
-}
-
-model ScoutLead {
-  id          Int      @id @default(autoincrement())
-  scannedChatId Int
-  chat        ScannedChat @relation(fields: [scannedChatId], references: [id])
-  
-  senderUsername String?
-  senderId       String?  // Telegram ID
-  text           String
-  
-  relevance   LeadRelevance @default(UNKNOWN)
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-enum LeadRelevance {
-  UNKNOWN
-  RELEVANT
-  IRRELEVANT
-}
-
-model Dialogue {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  status    DialogueStatus @default(ACTIVE)
-  stage     DialogueStage  @default(DISCOVERY) // Track conversation stage
-  source    DialogueSource @default(INBOUND)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  messages  Message[]
-}
-
-model Message {
-  id         Int      @id @default(autoincrement())
-  dialogueId Int
-  dialogue   Dialogue @relation(fields: [dialogueId], references: [id])
-  sender     MessageSender
-  text       String
-  status     MessageStatus @default(SENT)
-  feedback   String?       // Operator feedback/correction for this message
-  createdAt  DateTime @default(now())
-}
-
-model Template {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique // e.g., "discovery_intro", "offer_main"
-  content   String   // The prompt/message template
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// model Embedding {
-//   id        Int      @id @default(autoincrement())
-//   userId    Int
-//   user      User     @relation(fields: [userId], references: [id])
-//   vector    Unsupported("vector(384)") // Support for 384-dim vectors (e.g. all-MiniLM-L6-v2)
-//   model     String   // e.g. "xenova/all-MiniLM-L6-v2"
-//   createdAt DateTime @default(now())
-// }
-
-model KnowledgeItem {
-  id        Int      @id @default(autoincrement())
-  question  String   // The primary question/intent
-  answer    String   // The approved answer
-  tags      Json?    // Array of tags/categories
-  hits      Int      @default(0) // Usage count
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model LearningCandidate {
-  id              Int      @id @default(autoincrement())
-  originalQuestion String
-  operatorAnswer  String
-  status          CandidateStatus @default(PENDING) // PENDING, APPROVED, REJECTED
-  createdAt       DateTime @default(now())
-}
-
-enum CandidateStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  MERGED
-}
-
-enum UserStatus {
-  NEW
-  LEAD
-  QUALIFIED
-  REJECTED
-  MATCHED
-  BLOCKED
-  CUSTOMER
-}
-
-enum DialogueStatus {
-  ACTIVE
-  ARCHIVED
-}
-
-enum DialogueStage {
-  DISCOVERY
-  OFFER
-  QUALIFICATION
-  CLOSED
-}
-
-enum DialogueSource {
-  INBOUND
-  SCOUT
-}
-
-enum MessageSender {
-  USER
-  SIMULATOR
-  OPERATOR
-}
-
-enum MessageStatus {
-  SENT
-  DRAFT
-  RECEIVED
-}
-
-model Rule {
-  id        Int      @id @default(autoincrement())
-  content   String
-  isActive  Boolean  @default(true)
-  isGlobal  Boolean  @default(false)
-  userId    Int?     // Optional relation to User
-  user      User?    @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-}
-
-model IgnoreTrigger {
-  id        Int      @id @default(autoincrement())
-  keyword   String   @unique
-  type      String   @default("KEYWORD") // KEYWORD, USERNAME, PHONE
-  createdAt DateTime @default(now())
-}
-
-enum ProfileStatus {
-  EMPTY
-  PARTIAL
-  COMPLETE
+model OrderItem {
+  id           Int      @id @default(autoincrement())
+  batchId      Int
+  batch        OrderBatch @relation(fields: [batchId], references: [id])
+  vin          String?
+  mileage      Int?
+  workName     String
+  quantity     Float
+  price        Float
+  total        Float
+  isApproved   Boolean  @default(false)
+  validationError String? 
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

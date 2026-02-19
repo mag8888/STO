@@ -1,43 +1,27 @@
 {
-  "name": "telegram-simulator",
+  "name": "sto-project",
   "version": "1.0.0",
-  "description": "Simulate human behavior on Telegram Web using Puppeteer",
-  "main": "dist/server.js",
+  "type": "module",
+  "main": "index.js",
   "scripts": {
-    "start": "ts-node src/server.ts",
-    "dev": "ts-node src/server.ts",
-    "build": "tsc"
+    "start": "tsx src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [
-    "telegram",
-    "puppeteer",
-    "automation"
-  ],
+  "keywords": [],
   "author": "",
   "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "prisma": "5.10.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
   "dependencies": {
-    "@fastify/cors": "^8.5.0",
-    "@fastify/static": "^7.0.4",
     "@prisma/client": "5.10.2",
     "dotenv": "^17.3.1",
-    "fastify": "^4.26.1",
-    "input": "^1.0.1",
-    "openai": "^6.21.0",
-    "prisma": "5.10.2",
-    "puppeteer": "^22.0.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2",
-    "qrcode": "^1.5.4",
-    "qrcode-terminal": "^0.12.0",
-    "telegram": "^2.26.22"
-  },
-  "devDependencies": {
-    "@types/node": "^20.11.19",
-    "@types/qrcode": "^1.5.6",
-    "autoprefixer": "^10.4.24",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.18",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "grammy": "^1.40.0",
+    "openai": "^6.22.0"
   }
 }
