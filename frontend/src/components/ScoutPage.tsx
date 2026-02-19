@@ -59,8 +59,6 @@ const ScoutPage = () => {
         try {
             const data = await scanChat(chatUsername, scanLimit, scanKeywords);
             setLeads(data.leads);
-        } catch (e) {
-            console.error(e);
         } catch (e: any) {
             console.error(e);
             alert(`Scan failed: ${e.response?.data?.error || e.message}`);
