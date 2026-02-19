@@ -777,8 +777,9 @@ fastify.get('/scout/chats/:username/leads', async (req, reply) => {
         }
 
         // scanChatForLeads handles the logic
-        const leads = await scanChatForLeads(username, scanLimit, customKeywords, accessHash);
-        return { leads };
+        // scanChatForLeads handles the logic
+        const result = await scanChatForLeads(username, scanLimit, customKeywords, accessHash);
+        return result;
     } catch (e: any) {
         req.log.error(e);
         return reply.code(500).send({ error: `Scan failed: ${e.message}` });
