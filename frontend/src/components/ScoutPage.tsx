@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { scanChat, analyzeLead, importLead, api } from '../api';
-import { Play, Loader2, Sparkles, Save, ShieldAlert } from 'lucide-react';
+import { scanChat, analyzeLead, importLead, api, sendScoutDM, replyInChat } from '../api';
+import { Play, Loader2, Sparkles, Save, ShieldAlert, Send, MessageSquare, RefreshCw } from 'lucide-react';
 
 interface Lead {
+    id: number; // Message ID from Telegram
     text: string;
     date: number;
     isAdmin: boolean;
@@ -19,9 +20,11 @@ interface Lead {
         profile: any;
         draft: string;
         selectedScenarios?: string[]; // Track selected scenarios
+        customName?: string; // Editable name for template
     };
     isAnalyzing?: boolean;
     isImported?: boolean;
+    isSending?: boolean; // sending status
 }
 
 const SCENARIO_OPTIONS = [
@@ -93,7 +96,8 @@ const ScoutPage = () => {
             newLeads[index].analysis = {
                 ...result,
                 selectedScenarios: defaultScenarios,
-                draft: generateDraft(defaultScenarios, result.profile)
+                customName: lead.sender.firstName || 'Friend',
+                draft: generateDraft(defaultScenarios, { ...result.profile, firstName: lead.sender.firstName || 'Friend' })
             };
         } catch (e) {
             console.error(e);
@@ -285,8 +289,41 @@ const ScoutPage = () => {
                                     <div className="col-span-2"><span className="text-muted-foreground">Business Card:</span> <span className="text-foreground">{lead.analysis.profile.businessCard || '—'}</span></div>
                                 </div>
 
+                                {/* Name Editing */}
                                 <div className="mb-4">
-                                    <label className="text-xs text-muted-foreground uppercase font-bold mb-1 block">Draft Proposal:</label>
+                                    <label className="text-xs text-muted-foreground uppercase font-bold mb-1 block">Recipient Name:</label>
+                                    <input
+                                        type="text"
+                                        className="w-full bg-background border border-border rounded p-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        value={lead.analysis.customName || ''}
+                                        onChange={(e) => {
+                                            const newLeads = [...leads];
+                                            if (newLeads[idx].analysis) {
+                                                newLeads[idx].analysis!.customName = e.target.value;
+                                                setLeads(newLeads);
+                                            }
+                                        }}
+                                        placeholder="Name"
+                                    />
+                                </div>
+
+                                <div className="mb-4">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="text-xs text-muted-foreground uppercase font-bold">Draft Proposal:</label>
+                                        <button
+                                            onClick={() => {
+                                                const newLeads = [...leads];
+                                                const analysis = newLeads[idx].analysis!;
+                                                // Re-run generation with current name and scenarios
+                                                const generateText = (ids: string[]) => ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                analysis.draft = generateText(analysis.selectedScenarios || []);
+                                                setLeads(newLeads);
+                                            }}
+                                            className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                                        >
+                                            <RefreshCw className="w-3 h-3" /> Regenerate
+                                        </button>
+                                    </div>
 
                                     {/* Scenario Checkboxes */}
                                     <div className="flex flex-wrap gap-2 mb-2 bg-muted/20 p-2 rounded border border-border/50">
@@ -315,7 +352,7 @@ const ScoutPage = () => {
                                                         analysis.selectedScenarios = newScenarios;
 
                                                         // Regenerate Draft Loop
-                                                        const generateText = (ids: string[]) => ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text(analysis.profile || { firstName: lead.sender.firstName })).join(' ');
+                                                        const generateText = (ids: string[]) => ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
                                                         analysis.draft = generateText(newScenarios);
 
                                                         setLeads(newLeads);
@@ -339,25 +376,79 @@ const ScoutPage = () => {
                                     />
                                 </div>
 
-                                <div className="flex justify-end gap-2">
+                                <div className="flex justify-end gap-2 items-center">
                                     <button
                                         onClick={() => setLeads(prev => { const n = [...prev]; delete n[idx].analysis; return n; })}
-                                        className="px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
+                                        className="mr-auto px-3 py-1 text-sm text-muted-foreground hover:text-foreground"
                                     >
                                         Cancel
                                     </button>
+
+                                    {/* Send Buttons */}
+                                    <button
+                                        onClick={async () => {
+                                            if (!username || lead.isSending) return;
+                                            try {
+                                                const newLeads = [...leads];
+                                                newLeads[idx].isSending = true;
+                                                setLeads(newLeads);
+
+                                                await sendScoutDM(lead.sender.username || lead.sender.id, lead.analysis!.draft, lead.analysis!.customName || 'Friend', lead.sender.accessHash || undefined);
+
+                                                alert('Sent to DM!');
+                                                // Mark imported?
+                                                handleImport(idx);
+                                            } catch (e) {
+                                                alert('Failed to send DM');
+                                            } finally {
+                                                const newLeads = [...leads];
+                                                newLeads[idx].isSending = false;
+                                                setLeads(newLeads);
+                                            }
+                                        }}
+                                        disabled={lead.isSending}
+                                        className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                                    >
+                                        <Send className="w-3 h-3" /> Send DM
+                                    </button>
+
+                                    <button
+                                        onClick={async () => {
+                                            if (!username || lead.isSending) return;
+                                            try {
+                                                const newLeads = [...leads];
+                                                newLeads[idx].isSending = true;
+                                                setLeads(newLeads);
+
+                                                await replyInChat(username, lead.id, lead.analysis!.draft);
+
+                                                alert('Replied in Chat!');
+                                            } catch (e) {
+                                                alert('Failed to reply');
+                                            } finally {
+                                                const newLeads = [...leads];
+                                                newLeads[idx].isSending = false;
+                                                setLeads(newLeads);
+                                            }
+                                        }}
+                                        disabled={lead.isSending}
+                                        className="flex items-center gap-1 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 text-sm"
+                                    >
+                                        <MessageSquare className="w-3 h-3" /> Reply in Chat
+                                    </button>
+
                                     {!lead.isImported && (
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 ml-2 pl-2 border-l border-border/50">
                                             <button
                                                 onClick={() => handleImport(idx)}
                                                 disabled={lead.isImported}
-                                                className="flex-1 bg-purple-600 text-white py-2 rounded hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
+                                                className="flex-1 bg-purple-600 text-white py-2 px-3 rounded hover:bg-purple-700 disabled:opacity-50 text-sm font-medium"
                                             >
-                                                {lead.isImported ? 'Imported' : 'Import to CRM (👍)'}
+                                                {lead.isImported ? 'Imported' : 'Import (👍)'}
                                             </button>
                                             <button
                                                 onClick={() => handleDismiss(idx)}
-                                                className="px-4 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 text-sm font-medium"
+                                                className="px-3 py-2 border border-red-200 text-red-600 rounded hover:bg-red-50 text-sm font-medium"
                                             >
                                                 Dismiss (👎)
                                             </button>

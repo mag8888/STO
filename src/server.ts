@@ -7,7 +7,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyCors from '@fastify/cors';
 import { PrismaClient } from '@prisma/client';
 import { initClient, getClient, reconnectClient, getQR } from './client';
-import { sendMessageToUser, sendDraftMessage, scanChatForLeads, ensureUserAndDialogue, saveMessageToDb, createDraftMessage } from './actions';
+import { sendMessageToUser, sendDraftMessage, scanChatForLeads, ensureUserAndDialogue, saveMessageToDb, createDraftMessage, sendReplyInChat, sendScoutDM } from './actions';
 import { generateResponse, analyzeText } from './gpt';
 import { startListener } from './listener';
 
@@ -794,7 +794,7 @@ fastify.post('/scout/analyze', async (req, reply) => {
             userContext,
             kbContext,
             // Pass examples as separate args or part of context?
-            // Let's modify analyzeText signature.
+            // Let's modify analyzeText
             {
                 positive: relevantExamples.map(e => e.text),
                 negative: irrelevantExamples.map(e => e.text)
@@ -809,6 +809,30 @@ fastify.post('/scout/analyze', async (req, reply) => {
     } catch (e) {
         req.log.error(e);
         return reply.code(500).send({ error: 'AI Analysis exception' });
+    }
+});
+
+import { sendReplyInChat, sendScoutDM } from './actions';
+
+fastify.post('/scout/send-dm', async (req, reply) => {
+    const { username, text, name, accessHash } = req.body as { username: string, text: string, name: string, accessHash?: string };
+    try {
+        const result = await sendScoutDM(username, text, name || username, accessHash);
+        return result;
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to send DM' });
+    }
+});
+
+fastify.post('/scout/reply-chat', async (req, reply) => {
+    const { chatUsername, messageId, text } = req.body as { chatUsername: string, messageId: number, text: string };
+    try {
+        await sendReplyInChat(chatUsername, messageId, text);
+        return { success: true };
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to reply in chat' });
     }
 });
 

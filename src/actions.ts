@@ -295,6 +295,7 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
                 }
 
                 leads.push({
+                    id: msg.id,
                     text: msg.message,
                     date: msg.date,
                     isAdmin: isAdmin,
@@ -329,6 +330,35 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
 
     } catch (e: any) {
         console.error(`[Scout] Search failed: ${e.message}`);
+        throw e;
+    }
+}
+
+export async function sendReplyInChat(chatUsername: string, messageId: number, text: string) {
+    const client = getClient();
+    if (!client || !client.connected) throw new Error('Client not connected');
+
+    try {
+        await client.sendMessage(chatUsername, {
+            message: text,
+            replyTo: messageId
+        });
+        return { success: true };
+    } catch (e: any) {
+        console.error(`[Scout] Failed to reply in chat: ${e.message}`);
+        throw e;
+    }
+}
+
+export async function sendScoutDM(username: string, text: string, name: string, accessHash?: string) {
+    // 1. Ensure User/Dialogue exists (so we track it in CRM)
+    const { user, dialogue } = await ensureUserAndDialogue(username, name, accessHash, 'SCOUT');
+
+    // 2. Send Message
+    try {
+        await sendMessageToUser(user.id, text);
+        return { success: true, dialogueId: dialogue.id };
+    } catch (e) {
         throw e;
     }
 }
