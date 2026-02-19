@@ -163,8 +163,9 @@ const ScoutPage = () => {
             // Helper to generate text
             // Added support for customContext injection
             const generateDraft = (scenarios: string[], profile: any, customCtx?: string) => {
-                let text = scenarios
-                    .map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text(profile))
+                const safeScenarios = Array.isArray(scenarios) ? scenarios : [];
+                let text = safeScenarios
+                    .map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text(profile) || '')
                     .join(' ');
 
                 if (customCtx) {
@@ -425,7 +426,8 @@ const ScoutPage = () => {
                                                     const analysis = newLeads[idx].analysis!;
                                                     // Re-run generation with current name and scenarios
                                                     const generateText = (ids: string[]) => {
-                                                        let txt = ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                        const safeIds = Array.isArray(ids) ? ids : [];
+                                                        let txt = safeIds.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName }) || '').join(' ');
                                                         if (analysis.customContext) txt += ` ${analysis.customContext}`;
                                                         return txt;
                                                     };
@@ -466,7 +468,8 @@ const ScoutPage = () => {
 
                                                         // Regenerate Draft Loop
                                                         const generateText = (ids: string[]) => {
-                                                            let txt = ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                            const safeIds = Array.isArray(ids) ? ids : [];
+                                                            let txt = safeIds.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName }) || '').join(' ');
                                                             if (analysis.customContext) txt += ` ${analysis.customContext}`;
                                                             return txt;
                                                         };
@@ -496,7 +499,8 @@ const ScoutPage = () => {
 
                                                     const analysis = newLeads[idx].analysis!;
                                                     const generateText = (ids: string[]) => {
-                                                        let txt = ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                        const safeIds = Array.isArray(ids) ? ids : [];
+                                                        let txt = safeIds.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName }) || '').join(' ');
                                                         txt += ` ${e.target.value}`; // Use new value immediately
                                                         return txt;
                                                     };
@@ -629,7 +633,7 @@ const ScoutPage = () => {
                         </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                        {historyItems.length === 0 ? (
+                        {(!historyItems || historyItems.length === 0) ? (
                             <div className="text-center text-muted-foreground text-sm py-8">No history found</div>
                         ) : (
                             historyItems.map((item) => (
