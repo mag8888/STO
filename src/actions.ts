@@ -424,22 +424,26 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
         });
 
         if (scannedChat) {
-            await prisma.scannedChat.update({
-                where: { id: scannedChat.id },
-                data: { lastLeadsCount: leads.length, scannedAt: new Date() }
-            });
+            try {
+                await prisma.scannedChat.update({
+                    where: { id: scannedChat.id },
+                    data: { lastLeadsCount: leads.length, scannedAt: new Date() }
+                });
 
-            // Save Scan History
-            await prisma.scanHistory.create({
-                data: {
-                    scannedChatId: scannedChat.id,
-                    keywords: keywords.join(', '),
-                    limit: limit,
-                    leads: leads as any, // Cast to any for Json compatibility
-                    leadsCount: leads.length
-                }
-            });
-            console.log(`[Scout] Saved scan history for chat ${scannedChat.id}`);
+                // Save Scan History
+                await prisma.scanHistory.create({
+                    data: {
+                        scannedChatId: scannedChat.id,
+                        keywords: keywords.join(', '),
+                        limit: limit,
+                        leads: leads as any, // Cast to any for Json compatibility
+                        leadsCount: leads.length
+                    }
+                });
+                console.log(`[Scout] Saved scan history for chat ${scannedChat.id}`);
+            } catch (historyError) {
+                console.error(`[Scout] Failed to save history (non-critical):`, historyError);
+            }
         } else {
             console.warn(`[Scout] ScannedChat not found for ${chatUsername}, skipping history save.`);
             // Optionally create it? 

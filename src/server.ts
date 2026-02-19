@@ -241,10 +241,14 @@ fastify.get('/status', async (request, reply) => {
                 if (connected) {
                     const meCheck = Promise.race([
                         client.getMe(),
-                        new Promise<any>((_, reject) => setTimeout(() => reject('Timeout'), 2000))
+                        new Promise<any>((_, reject) => setTimeout(() => reject('Timeout'), 4000))
                     ]);
-                    me = await meCheck;
-                    console.log(`[API] /status - Me check complete`);
+                    try {
+                        me = await meCheck;
+                        console.log(`[API] /status - Me check complete: @${me?.username}`);
+                    } catch (meError) {
+                        console.error('[API] /status - Me check failed:', meError);
+                    }
                 }
             } catch (e) {
                 console.error('[API] /status check timed out or failed:', e);
@@ -1178,8 +1182,12 @@ const start = async () => {
         }
 
         console.log('[STARTUP] Connecting to Database...');
-        await prisma.$connect();
-        console.log('[STARTUP] Database connected.');
+        try {
+            await prisma.$connect();
+            console.log('[STARTUP] Database connected.');
+        } catch (dbErr) {
+            console.error('[STARTUP] ⚠️ Database connection failed (Non-critical for some features):', dbErr);
+        }
 
         const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
         console.log(`[STARTUP] Binding to 0.0.0.0:${port}`);
