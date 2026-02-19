@@ -812,7 +812,7 @@ fastify.post('/scout/analyze', async (req, reply) => {
     }
 });
 
-import { sendReplyInChat, sendScoutDM } from './actions';
+
 
 fastify.post('/scout/send-dm', async (req, reply) => {
     const { username, text, name, accessHash } = req.body as { username: string, text: string, name: string, accessHash?: string };
