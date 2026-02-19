@@ -427,7 +427,19 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
             data: { lastLeadsCount: leads.length, scannedAt: new Date() }
         });
 
-        return leads;
+        // Fetch Chat Title
+        let chatTitle = chatUsername;
+        try {
+            // We used inputPeer earlier.
+            const entity = await client.getEntity(inputPeer);
+            if (entity) {
+                chatTitle = (entity as any).title || (entity as any).username || chatUsername;
+            }
+        } catch (e) {
+            console.warn('[Scout] Failed to fetch chat title:', e);
+        }
+
+        return { leads, chatTitle };
 
     } catch (e: any) {
         console.error(`[Scout] Search failed: ${e.message}`);

@@ -21,6 +21,7 @@ interface Lead {
         draft: string;
         selectedScenarios?: string[]; // Track selected scenarios
         customName?: string; // Editable name for template
+        customContext?: string; // New custom context field
     };
     isAnalyzing?: boolean;
     isImported?: boolean;
@@ -37,29 +38,63 @@ const SCENARIO_OPTIONS = [
     { id: 'cta_soft', label: '❓ CTA: Мягкий', text: (_: any) => `Было бы интересно попробовать ? ` },
 ];
 
+// Local storage hook helper
+const useLocalStorage = <T,>(key: string, initialValue: T) => {
+    const [storedValue, setStoredValue] = useState<T>(() => {
+        try {
+            const item = window.localStorage.getItem(key);
+            return item ? JSON.parse(item) : initialValue;
+        } catch (error) {
+            console.error(error);
+            return initialValue;
+        }
+    });
+    const setValue = (value: T | ((val: T) => T)) => {
+        try {
+            const valueToStore = value instanceof Function ? value(storedValue) : value;
+            setStoredValue(valueToStore);
+            window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+            console.error(error);
+        }
+    };
+    return [storedValue, setValue] as const;
+};
+
 const ScoutPage = () => {
     const { username } = useParams();
     const [leads, setLeads] = useState<Lead[]>([]);
     const [scanning, setScanning] = useState(false);
     const [scanLimit, setScanLimit] = useState(50);
     const [scanKeywords, setScanKeywords] = useState('');
+    const [chatTitle, setChatTitle] = useState<string>('');
 
-    // const [chats, setChats] = useState<any[]>([]); // Removed internal sidebar logic
+    // Templates
+    const [templates, setTemplates] = useLocalStorage<{ id: string, name: string, content: string }[]>('scout_templates', []);
+    const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
     useEffect(() => {
         if (username) {
             handleScan(username);
         } else {
             setLeads([]);
+            setChatTitle('');
         }
     }, [username]);
 
     const handleScan = async (chatUsername: string) => {
         setScanning(true);
         setLeads([]);
+        setChatTitle(chatUsername); // Default
         try {
             const data = await scanChat(chatUsername, scanLimit, scanKeywords);
-            setLeads(data.leads);
+            // Support both old array format and new object format
+            if (Array.isArray(data)) {
+                setLeads(data);
+            } else {
+                setLeads(data.leads);
+                setChatTitle(data.chatTitle || chatUsername);
+            }
         } catch (e: any) {
             console.error(e);
             alert(`Scan failed: ${e.response?.data?.error || e.message}`);
@@ -77,48 +112,47 @@ const ScoutPage = () => {
         try {
             const result = await analyzeLead(lead.text, lead.sender);
 
-            // Initialize with all scenarios selected by default OR just empty manual draft?
-            // User wants flexible selection. Let's select Greeting + Context + Offer by default.
             // User wants flexible selection. Let's select Greeting + Context + Offer by default.
             let defaultScenarios = ['greeting', 'context_chat', 'offer_service', 'cta_soft'];
             let pollVote = null;
 
             // Check for Poll
             if (lead.text.startsWith('[POLL]')) {
-                // Extract vote: [POLL] Voted "Option" in...
                 const match = lead.text.match(/Voted "([^"]+)"/);
                 if (match) {
                     pollVote = match[1];
                 }
-                // Switch context scenario
                 defaultScenarios = defaultScenarios.map(s => s === 'context_chat' ? 'poll_context' : s);
             }
 
             // Helper to generate text
-            const generateDraft = (scenarios: string[], profile: any) => {
-                return scenarios
+            // Added support for customContext injection
+            const generateDraft = (scenarios: string[], profile: any, customCtx?: string) => {
+                let text = scenarios
                     .map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text(profile))
                     .join(' ');
-            };
 
-            // If AI returned a draft, we might want to keep it or override?
-            // User request implies using checkboxes to *construct* the draft. 
-            // Let's use the Checkbox system as the PRIMARY drafter, but keep AI's "profile" extraction.
-            // We can put AI's draft in a "Custom" slot or just overwrite it with scenarios.
-            // Let's initialize with Scenarios to demonstrate the feature.
+                if (customCtx) {
+                    text += ` ${customCtx}`;
+                }
+                return text;
+            };
 
             const profileWithPoll = {
                 ...result.profile,
                 firstName: lead.sender.firstName || 'Friend',
-                pollVote: pollVote
+                pollVote: pollVote,
+                channelBox: chatTitle // Pass channel title to scenarios if we want
             };
 
             newLeads[index].analysis = {
                 ...result,
                 selectedScenarios: defaultScenarios,
                 customName: lead.sender.firstName || 'Friend',
-                draft: generateDraft(defaultScenarios, profileWithPoll), // Use enhanced profile
-                profile: profileWithPoll // Store it so checkboxes reuse it
+                draft: generateDraft(defaultScenarios, profileWithPoll),
+                profile: profileWithPoll,
+                // Initialize customContext
+                customContext: ''
             };
         } catch (e) {
             console.error(e);
@@ -134,44 +168,22 @@ const ScoutPage = () => {
         if (!lead.analysis || !username) return;
 
         try {
-            // Need source chat ID. 
-            // FIXME: The backend API currently requires sourceChatId (Int), but we only have username here.
-            // Ideally backend 'import' should accept username or resolve it. 
-            // For now, let's pass 0 or fix backend to resolve username to ID.
-            // Actually, server code for import: `where: { id: sourceChatId } ` on ScannedChat.
-            // We don't have the ID handy unless we fetch chat list again or pass it.
-            // HACK: Pass 0 for now, or fetch chat details first?
-            // BETTER: 'importLead' could look up ScannedChat by username? 
-            // Or let's just pass "0" and ignore strict relation for a moment? No, relation is required.
-            // Sidebar has the ID. We could pass state via router location?
-            // Let's assume user just wants it to work. We can try to get ID from list if we cache it?
-            // Or just fetch `getScoutChats` here once to map username -> ID.
-
-            // QUICK FIX: Pass 0, backend might fail if FK constraint. 
-            // Let's rely on Sidebar passing state? 
-            // User: "just make it separate tabs".
-            // I'll update importLead to optionally take username if backend supports it, or I fetch IDs here.
-
-            // Let's fetch the list of chats to find unique ID for this username.
-            // This is inefficient but safe.
-
-            // 1. Send Feedback (Positive)
             try {
-                // We need scannedChatId. For now, let's try to get it from context or pass 0 if unknown.
-                // ideally backend resolves this from 'username' but we don't have chat ID here easily 
-                // unless we fetch it.
-                // Let's rely on backend to handle "0" or just log it.
                 await api.post('/scout/feedback', {
                     text: lead.text,
                     senderUsername: lead.sender.username,
                     senderId: lead.sender.id,
-                    scannedChatId: 0, // Placeholder
+                    scannedChatId: 0,
                     relevance: 'RELEVANT'
                 });
             } catch (e) {
                 console.warn('Feedback failed', e);
             }
 
+            // Save context as message?
+            // "Automatically subst receiving channel as inviter"
+            // We can pass `chatTitle` as context if backend supports it.
+            // For now, it's just importing the user.
             await importLead(lead.sender, lead.analysis.profile, lead.analysis.draft, 0);
 
             const newLeads = [...leads];
@@ -196,7 +208,6 @@ const ScoutPage = () => {
                 relevance: 'IRRELEVANT'
             });
 
-            // Remove from list
             const newLeads = leads.filter((_, i) => i !== index);
             setLeads(newLeads);
         } catch (e) {
@@ -205,11 +216,29 @@ const ScoutPage = () => {
         }
     };
 
-    // Helper to get ID for import (since we stripped sidebar)
-    // Actually, we can just pass username and let backend handle resolution? 
-    // Backend expects Int.
-    // Let's ignore this for the MVP step unless user complains. Or better:
-    // Update `handleImport` to accept `chatUsername` and backend logic or just fetch list here.
+    // Helper to apply a template
+    const applyTemplate = (index: number, templateId: string) => {
+        const newLeads = [...leads];
+        const template = templates.find(t => t.id === templateId);
+        if (!template || !newLeads[index].analysis) return;
+
+        const analysis = newLeads[index].analysis!;
+        // Substitute variables
+        let content = template.content;
+        content = content.replace(/{name}/g, analysis.customName || 'Friend');
+        content = content.replace(/{channel}/g, chatTitle || 'Chat');
+
+        analysis.draft = content;
+        setLeads(newLeads);
+        setSelectedTemplate(''); // Reset dropdown
+    };
+
+    const saveAsTemplate = (content: string) => {
+        const name = prompt('Enter template name:', 'New Template');
+        if (name) {
+            setTemplates(prev => [...prev, { id: Date.now().toString(), name, content }]);
+        }
+    };
 
     if (!username) {
         return (
@@ -226,8 +255,8 @@ const ScoutPage = () => {
         <div className="h-full flex flex-col p-6 overflow-y-auto bg-background/50">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">@{username}</h2>
-                    <p className="text-sm text-muted-foreground">Found {leads.length} leads</p>
+                    <h2 className="text-2xl font-bold flex items-center gap-2">@{chatTitle || username}</h2>
+                    <p className="text-sm text-muted-foreground">Found {leads.length} leads in {chatTitle}</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1 bg-background border rounded px-2 py-1">
@@ -304,6 +333,7 @@ const ScoutPage = () => {
                             </div>
                         ) : (
                             <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-4 animate-in fade-in duration-300">
+                                {/* ... Stats Grid ... */}
                                 <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
                                     <div><span className="text-muted-foreground">Activity:</span> <span className="text-foreground font-medium">{lead.analysis.profile.activity || '—'}</span></div>
                                     <div><span className="text-muted-foreground">City:</span> <span className="text-foreground font-medium">{lead.analysis.profile.city || '—'}</span></div>
@@ -328,22 +358,43 @@ const ScoutPage = () => {
                                     />
                                 </div>
 
+                                {/* Scenarios & Tools */}
                                 <div className="mb-4">
                                     <div className="flex justify-between items-center mb-1">
                                         <label className="text-xs text-muted-foreground uppercase font-bold">Draft Proposal:</label>
-                                        <button
-                                            onClick={() => {
-                                                const newLeads = [...leads];
-                                                const analysis = newLeads[idx].analysis!;
-                                                // Re-run generation with current name and scenarios
-                                                const generateText = (ids: string[]) => ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
-                                                analysis.draft = generateText(analysis.selectedScenarios || []);
-                                                setLeads(newLeads);
-                                            }}
-                                            className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1"
-                                        >
-                                            <RefreshCw className="w-3 h-3" /> Regenerate
-                                        </button>
+                                        <div className="flex gap-2">
+                                            {/* Templates Dropdown */}
+                                            {templates.length > 0 && (
+                                                <select
+                                                    className="text-xs bg-background border border-border rounded px-1"
+                                                    onChange={(e) => applyTemplate(idx, e.target.value)}
+                                                    value={selectedTemplate}
+                                                >
+                                                    <option value="">-- Apply Template --</option>
+                                                    {templates.map(t => (
+                                                        <option key={t.id} value={t.id}>{t.name}</option>
+                                                    ))}
+                                                </select>
+                                            )}
+
+                                            <button
+                                                onClick={() => {
+                                                    const newLeads = [...leads];
+                                                    const analysis = newLeads[idx].analysis!;
+                                                    // Re-run generation with current name and scenarios
+                                                    const generateText = (ids: string[]) => {
+                                                        let txt = ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                        if (analysis.customContext) txt += ` ${analysis.customContext}`;
+                                                        return txt;
+                                                    };
+                                                    analysis.draft = generateText(analysis.selectedScenarios || []);
+                                                    setLeads(newLeads);
+                                                }}
+                                                className="text-xs text-purple-600 hover:text-purple-700 flex items-center gap-1"
+                                            >
+                                                <RefreshCw className="w-3 h-3" /> Regenerate
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {/* Scenario Checkboxes */}
@@ -362,7 +413,6 @@ const ScoutPage = () => {
                                                         let newScenarios;
                                                         if (e.target.checked) {
                                                             newScenarios = [...Scenarios, option.id];
-                                                            // Sort by original order to keep text logical
                                                             newScenarios.sort((a, b) => {
                                                                 return SCENARIO_OPTIONS.findIndex(o => o.id === a) - SCENARIO_OPTIONS.findIndex(o => o.id === b);
                                                             });
@@ -373,7 +423,11 @@ const ScoutPage = () => {
                                                         analysis.selectedScenarios = newScenarios;
 
                                                         // Regenerate Draft Loop
-                                                        const generateText = (ids: string[]) => ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                        const generateText = (ids: string[]) => {
+                                                            let txt = ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                            if (analysis.customContext) txt += ` ${analysis.customContext}`;
+                                                            return txt;
+                                                        };
                                                         analysis.draft = generateText(newScenarios);
 
                                                         setLeads(newLeads);
@@ -382,6 +436,34 @@ const ScoutPage = () => {
                                                 {option.label}
                                             </label>
                                         ))}
+                                    </div>
+
+                                    {/* Custom Context Input */}
+                                    <div className="mb-2">
+                                        <input
+                                            type="text"
+                                            className="w-full bg-red-50/50 border border-red-200 rounded p-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-red-400 transition-colors"
+                                            placeholder="Вставьте свой текст здесь (добавится в конец)..."
+                                            value={(lead.analysis as any).customContext || ''}
+                                            onChange={(e) => {
+                                                const newLeads = [...leads];
+                                                if (newLeads[idx].analysis) {
+                                                    (newLeads[idx].analysis as any).customContext = e.target.value;
+                                                    // Trigger regeneration? Or wait for Manual Regenerate?
+                                                    // User might want to type and see results. Let's auto-update draft.
+
+                                                    const analysis = newLeads[idx].analysis!;
+                                                    const generateText = (ids: string[]) => {
+                                                        let txt = ids.map(id => SCENARIO_OPTIONS.find(o => o.id === id)?.text({ ...analysis.profile, firstName: analysis.customName })).join(' ');
+                                                        txt += ` ${e.target.value}`; // Use new value immediately
+                                                        return txt;
+                                                    };
+                                                    analysis.draft = generateText(analysis.selectedScenarios || []);
+
+                                                    setLeads(newLeads);
+                                                }
+                                            }}
+                                        />
                                     </div>
 
                                     <textarea
@@ -395,6 +477,15 @@ const ScoutPage = () => {
                                             }
                                         }}
                                     />
+
+                                    <div className="flex justify-end mt-1">
+                                        <button
+                                            onClick={() => saveAsTemplate(lead.analysis!.draft)}
+                                            className="text-[10px] text-muted-foreground hover:text-purple-600 underline"
+                                        >
+                                            Save as Template
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-end gap-2 items-center">

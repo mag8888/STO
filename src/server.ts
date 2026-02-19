@@ -475,8 +475,8 @@ fastify.post('/scan-chat', async (req, reply) => {
         // Extract username from link if needed (e.g. t.me/username -> username)
         let username = chatLink.replace('https://t.me/', '').replace('@', '').split('/')[0];
 
-        const leads = await scanChatForLeads(username, limit || 50);
-        return leads;
+        const result = await scanChatForLeads(username, limit || 50);
+        return result;
     } catch (e: any) {
         req.log.error(e);
         return reply.code(500).send({ error: 'Scan failed', details: e.message });
