@@ -28,9 +28,10 @@ interface Lead {
 }
 
 const SCENARIO_OPTIONS = [
-    { id: 'greeting', label: '👋 Приветствие (Имя)', text: (p: any) => `${p.firstName ? `Привет, ${p.firstName}` : 'Привет'}, ` },
+    { id: 'greeting', label: '👋 Приветствие (Имя)', text: (p: any) => `${p.firstName ? `${p.firstName}, Привет` : 'Привет'}, ` },
     { id: 'hook_interest', label: '👌 Интересный проект', text: (p: any) => `У вас интересное направление(${p.activity || 'работа'})!` },
     { id: 'context_chat', label: '👀 Видел в чате', text: (_: any) => `Увидел ваше сообщение в чате по нетворкингу.` },
+    { id: 'poll_context', label: '📊 Участие в опросе', text: (p: any) => p.pollVote ? `Видел, что вы проголосовали "${p.pollVote}" в нашем опросе.` : `Видел ваш ответ в опросе.` },
     { id: 'offer_club', label: '🚀 Оффер: Клуб', text: (_: any) => `Мы делаем онлайн - нетворкинг и можем знакомить вас с полезными людьми каждый день.` },
     { id: 'offer_service', label: '🤖 Оффер: ИИ сервис', text: (_: any) => `Мы сделали сервис, который дает 5 - 10 теплых интро ежедневно.` },
     { id: 'cta_soft', label: '❓ CTA: Мягкий', text: (_: any) => `Было бы интересно попробовать ? ` },
@@ -78,7 +79,20 @@ const ScoutPage = () => {
 
             // Initialize with all scenarios selected by default OR just empty manual draft?
             // User wants flexible selection. Let's select Greeting + Context + Offer by default.
-            const defaultScenarios = ['greeting', 'context_chat', 'offer_service', 'cta_soft'];
+            // User wants flexible selection. Let's select Greeting + Context + Offer by default.
+            let defaultScenarios = ['greeting', 'context_chat', 'offer_service', 'cta_soft'];
+            let pollVote = null;
+
+            // Check for Poll
+            if (lead.text.startsWith('[POLL]')) {
+                // Extract vote: [POLL] Voted "Option" in...
+                const match = lead.text.match(/Voted "([^"]+)"/);
+                if (match) {
+                    pollVote = match[1];
+                }
+                // Switch context scenario
+                defaultScenarios = defaultScenarios.map(s => s === 'context_chat' ? 'poll_context' : s);
+            }
 
             // Helper to generate text
             const generateDraft = (scenarios: string[], profile: any) => {
@@ -93,11 +107,18 @@ const ScoutPage = () => {
             // We can put AI's draft in a "Custom" slot or just overwrite it with scenarios.
             // Let's initialize with Scenarios to demonstrate the feature.
 
+            const profileWithPoll = {
+                ...result.profile,
+                firstName: lead.sender.firstName || 'Friend',
+                pollVote: pollVote
+            };
+
             newLeads[index].analysis = {
                 ...result,
                 selectedScenarios: defaultScenarios,
                 customName: lead.sender.firstName || 'Friend',
-                draft: generateDraft(defaultScenarios, { ...result.profile, firstName: lead.sender.firstName || 'Friend' })
+                draft: generateDraft(defaultScenarios, profileWithPoll), // Use enhanced profile
+                profile: profileWithPoll // Store it so checkboxes reuse it
             };
         } catch (e) {
             console.error(e);

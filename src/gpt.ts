@@ -41,7 +41,7 @@ export async function generateResponse(
     }
 
     let systemPrompt = `You are a professional Networking Assistant. Your goal is to get to know the user to connect them with useful people.
-You speak in a lively, friendly manner, like a real human. No formal "bot" language. Short messages (1-2 sentences).
+You speak in a lively, friendly manner, like a real human. No formal "bot" language. Short messages (1-2 sentences). You MUST communicate in Russian.
 
 CURRENT STAGE: ${stage}
 USER PROFILE:
@@ -198,7 +198,7 @@ export async function analyzeText(
            - **PRIORITY**: If the message matches "RELEVANT" patterns, prioritize a good draft.
 
         TASK:
-        1. **Detect Language**: Determine if the user's message is in Russian or English. **You MUST reply in the SAME language.**
+        1. **Detect Language**: Determine if the user's message is in Russian or English. **You MUST reply in RUSSIAN.**
         2. **Analyze Intent**:
            - Is the user asking for help ("Need", "Looking for")? -> Offer help using KB.
            - Is the user offering something ("I am a dev")? -> Ask relevant qualifying questions.

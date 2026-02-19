@@ -226,6 +226,7 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
     const client = getClient();
     if (!client || !client.connected) throw new Error('Client not connected');
 
+    let messages: any[] = [];
     try {
         let inputPeer: any = chatUsername;
 
@@ -334,6 +335,79 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
                         accessHash: sender.accessHash ? sender.accessHash.toString() : null
                     }
                 });
+            }
+
+            // --- Poll Detection ---
+            if (msg.media && msg.media.className === 'MessageMediaPoll' && msg.media.poll) {
+                const poll = msg.media.poll;
+                // Only process public polls
+                if (!poll.publicVoters) {
+                    console.log(`[Scout] Skipping anonymous poll: ${poll.question}`);
+                    continue;
+                }
+
+                console.log(`[Scout] Found Public Poll: "${poll.question}"`);
+
+                try {
+                    // Fetch votes
+                    // We need the InputPeer for the chat, which we have as `inputPeer` (variable from earlier)
+                    // AND the message ID.
+
+                    // The gramjs inputPeer might be an ID or an object. 
+                    // `getMessages` used it, so it should be valid.
+
+                    // We need to iterate over options or just get all?
+                    // GetPollVotes requires an option if we want specific results, but maybe we can iterate or there is a helper?
+                    // Api.messages.GetPollVotes gives votes for a specific option or all? 
+                    // It takes `option?: Buffer`. If undefined, maybe all? No, documentation says filter by option usually.
+                    // Let's iterate over `poll.answers`.
+
+                    for (const answer of poll.answers) {
+                        const optionText = answer.text;
+                        const optionData = answer.option; // Buffer
+
+                        // Pagination for votes? Limit is usually small in this context or we take first 50.
+                        const votesRes = await client.invoke(
+                            new Api.messages.GetPollVotes({
+                                peer: inputPeer,
+                                id: msg.id,
+                                option: optionData,
+                                limit: 50
+                            })
+                        ) as any;
+
+                        // votesRes has .users (list of User) and .votes (list of MessageUserVote?)
+                        // We are interested in the users.
+
+                        if (votesRes && votesRes.users && votesRes.users.length > 0) {
+                            for (const user of votesRes.users) {
+                                // Avoid duplicates if we already added this user from text scan?
+                                // Or just add them as a separate lead type.
+                                // Let's add them.
+
+                                // Filter out self/bots
+                                if (user.bot || user.isSelf) continue;
+
+                                leads.push({
+                                    id: msg.id, // Use Poll Message ID
+                                    text: `[POLL] Voted "${optionText}" in question: "${poll.question}"`,
+                                    date: msg.date,
+                                    isAdmin: false, // Hard to tell without checking participant, assume false or check later
+                                    sender: {
+                                        id: user.id.toString(),
+                                        username: user.username,
+                                        firstName: user.firstName,
+                                        lastName: user.lastName,
+                                        accessHash: user.accessHash ? user.accessHash.toString() : null
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                } catch (e) {
+                    console.error(`[Scout] Failed to fetch poll votes:`, e);
+                }
             }
         }
 
