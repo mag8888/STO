@@ -103,3 +103,15 @@ export const importLead = async (user: any, profile: any, draft: string, sourceC
     const response = await api.post('/scout/import', { user, profile, draft, sourceChatId });
     return response.data;
 };
+
+// --- History API ---
+
+export const getScanHistory = async () => {
+    const response = await api.get<{ id: number; createdAt: string; keywords: string; limit: number; leadsCount: number; chat: { title?: string; username?: string; link?: string } }[]>('/scout/history');
+    return response.data;
+};
+
+export const getScanHistoryEntry = async (id: number) => {
+    const response = await api.get<{ leads: any[]; chat: any; keywords: string }>('/scout/history/' + id);
+    return response.data;
+};

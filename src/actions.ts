@@ -413,19 +413,40 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
 
         console.log(`[Scout] Found ${leads.length} potential leads.`);
 
-        // Update DB Count
-        // We need to find the ScannedChat by username/link. 
-        // Since we only have 'chatUsername', we try to find a match.
-        // Optimization: Pass ID instead of username? Or just findFirst.
-        await prisma.scannedChat.updateMany({
+        // Update DB Count and Save History
+        const scannedChat = await prisma.scannedChat.findFirst({
             where: {
                 OR: [
                     { username: chatUsername },
                     { link: { contains: chatUsername } }
                 ]
-            },
-            data: { lastLeadsCount: leads.length, scannedAt: new Date() }
+            }
         });
+
+        if (scannedChat) {
+            await prisma.scannedChat.update({
+                where: { id: scannedChat.id },
+                data: { lastLeadsCount: leads.length, scannedAt: new Date() }
+            });
+
+            // Save Scan History
+            await prisma.scanHistory.create({
+                data: {
+                    scannedChatId: scannedChat.id,
+                    keywords: keywords.join(', '),
+                    limit: limit,
+                    leads: leads as any, // Cast to any for Json compatibility
+                    leadsCount: leads.length
+                }
+            });
+            console.log(`[Scout] Saved scan history for chat ${scannedChat.id}`);
+        } else {
+            console.warn(`[Scout] ScannedChat not found for ${chatUsername}, skipping history save.`);
+            // Optionally create it? 
+            // For now, assume it exists or we skip history.
+        }
+
+        // Fetch Chat Title
 
         // Fetch Chat Title
         let chatTitle = chatUsername;

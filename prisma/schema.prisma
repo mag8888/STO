@@ -56,6 +56,20 @@ model ScannedChat {
   
   users       User[]
   leads       ScoutLead[]
+  scanHistory ScanHistory[]
+}
+
+model ScanHistory {
+  id          Int      @id @default(autoincrement())
+  scannedChatId Int
+  chat        ScannedChat @relation(fields: [scannedChatId], references: [id])
+  
+  keywords    String?  // Keywords used for this scan
+  limit       Int      @default(50)
+  leads       Json     // Stored as JSON array of lead objects
+  leadsCount  Int      @default(0)
+  
+  createdAt   DateTime @default(now())
 }
 
 model ScoutLead {

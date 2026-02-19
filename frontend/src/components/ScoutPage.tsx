@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { scanChat, analyzeLead, importLead, api, sendScoutDM, replyInChat } from '../api';
-import { Play, Loader2, Sparkles, Save, ShieldAlert, Send, MessageSquare, RefreshCw } from 'lucide-react';
+import { scanChat, analyzeLead, importLead, api, sendScoutDM, replyInChat, getScanHistory, getScanHistoryEntry } from '../api';
+import { Play, Loader2, Sparkles, Save, ShieldAlert, Send, MessageSquare, RefreshCw, History as HistoryIcon, X } from 'lucide-react';
 
 interface Lead {
     id: number; // Message ID from Telegram
@@ -26,6 +26,7 @@ interface Lead {
     isAnalyzing?: boolean;
     isImported?: boolean;
     isSending?: boolean; // sending status
+    customContext?: string; // Add this to Lead interface if missing in original
 }
 
 const SCENARIO_OPTIONS = [
@@ -69,6 +70,10 @@ const ScoutPage = () => {
     const [scanKeywords, setScanKeywords] = useState('');
     const [chatTitle, setChatTitle] = useState<string>('');
 
+    // History
+    const [showHistory, setShowHistory] = useState(false);
+    const [historyItems, setHistoryItems] = useState<any[]>([]);
+
     // Templates
     const [templates, setTemplates] = useLocalStorage<{ id: string, name: string, content: string }[]>('scout_templates', []);
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -98,6 +103,36 @@ const ScoutPage = () => {
         } catch (e: any) {
             console.error(e);
             alert(`Scan failed: ${e.response?.data?.error || e.message}`);
+        } finally {
+            setScanning(false);
+        }
+    };
+
+    const toggleHistory = async () => {
+        if (!showHistory) {
+            try {
+                const history = await getScanHistory();
+                setHistoryItems(history);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        setShowHistory(!showHistory);
+    };
+
+    const loadHistoryEntry = async (id: number) => {
+        try {
+            setScanning(true);
+            const entry = await getScanHistoryEntry(id);
+            setLeads(entry.leads); // Leads stored as JSON, should be compatible
+            if (entry.chat) {
+                setChatTitle(entry.chat.title || entry.chat.username || entry.chat.link || 'History Scan');
+            }
+            setScanKeywords(entry.keywords || '');
+            setShowHistory(false);
+        } catch (e) {
+            console.error(e);
+            alert('Failed to load history');
         } finally {
             setScanning(false);
         }
@@ -280,6 +315,13 @@ const ScoutPage = () => {
                             placeholder="default (i.e. 'need, offer')"
                         />
                     </div>
+                    <button
+                        onClick={toggleHistory}
+                        className={`p-2 rounded border border-border hover:bg-muted ${showHistory ? 'bg-muted text-primary' : 'text-muted-foreground'}`}
+                        title="Scan History"
+                    >
+                        <HistoryIcon className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={() => handleScan(username!)}
                         disabled={scanning}
@@ -577,6 +619,43 @@ const ScoutPage = () => {
                     </div>
                 ))}
             </div>
+            {/* History Sidebar */}
+            {showHistory && (
+                <div className="absolute top-0 right-0 h-full w-80 bg-background border-l border-border shadow-xl z-50 flex flex-col animate-in slide-in-from-right duration-300">
+                    <div className="p-4 border-b border-border flex justify-between items-center bg-muted/20">
+                        <h3 className="font-bold flex items-center gap-2"><HistoryIcon className="w-4 h-4" /> Scan History</h3>
+                        <button onClick={() => setShowHistory(false)} className="text-muted-foreground hover:text-foreground">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                        {historyItems.length === 0 ? (
+                            <div className="text-center text-muted-foreground text-sm py-8">No history found</div>
+                        ) : (
+                            historyItems.map((item) => (
+                                <div
+                                    key={item.id}
+                                    onClick={() => loadHistoryEntry(item.id)}
+                                    className="border border-border/50 rounded p-3 hover:bg-muted/50 cursor-pointer transition-colors text-sm"
+                                >
+                                    <div className="font-medium text-foreground mb-1">
+                                        {item.chat?.title || item.chat?.username || 'Unknown Chat'}
+                                    </div>
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span>{new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        <span className="bg-secondary px-1.5 py-0.5 rounded text-secondary-foreground">{item.leadsCount} leads</span>
+                                    </div>
+                                    {item.keywords && (
+                                        <div className="mt-1 text-xs text-muted-foreground truncate opacity-70">
+                                            Keywords: {item.keywords}
+                                        </div>
+                                    )}
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

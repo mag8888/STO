@@ -774,6 +774,36 @@ fastify.get('/scout/chats/:username/leads', async (req, reply) => {
     }
 });
 
+// Get Scan History
+fastify.get('/scout/history', async (req, reply) => {
+    try {
+        const history = await prisma.scanHistory.findMany({
+            include: { chat: true },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        });
+        return history;
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to fetch history' });
+    }
+});
+
+fastify.get('/scout/history/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+        const entry = await prisma.scanHistory.findUnique({
+            where: { id: parseInt(id) },
+            include: { chat: true }
+        });
+        if (!entry) return reply.code(404).send({ error: 'History not found' });
+        return entry;
+    } catch (e: any) {
+        req.log.error(e);
+        return reply.code(500).send({ error: 'Failed to fetch history entry' });
+    }
+});
+
 // Analyze a lead (AI)
 fastify.post('/scout/analyze', async (req, reply) => {
     const { text, user } = req.body as { text: string, user: any };
