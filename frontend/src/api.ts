@@ -79,6 +79,11 @@ export const addScoutChat = async (link: string) => {
     return response.data;
 };
 
+export const scanChat = async (username: string, limit: number = 50, keywords?: string) => {
+    const response = await api.get<{ leads: any[] }>(`/scout/chats/${username}/leads`, { params: { limit, keywords } });
+    return response.data;
+};
+
 export const sendScoutDM = async (username: string, text: string, name: string, accessHash?: string) => {
     const response = await api.post('/scout/send-dm', { username, text, name, accessHash });
     return response.data;
