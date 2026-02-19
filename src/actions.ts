@@ -414,17 +414,18 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
         console.log(`[Scout] Found ${leads.length} potential leads.`);
 
         // Update DB Count and Save History
-        const scannedChat = await prisma.scannedChat.findFirst({
-            where: {
-                OR: [
-                    { username: chatUsername },
-                    { link: { contains: chatUsername } }
-                ]
-            }
-        });
+        let scannedChat;
+        try {
+            scannedChat = await prisma.scannedChat.findFirst({
+                where: {
+                    OR: [
+                        { username: chatUsername },
+                        { link: { contains: chatUsername } }
+                    ]
+                }
+            });
 
-        if (scannedChat) {
-            try {
+            if (scannedChat) {
                 await prisma.scannedChat.update({
                     where: { id: scannedChat.id },
                     data: { lastLeadsCount: leads.length, scannedAt: new Date() }
@@ -441,13 +442,11 @@ export async function scanChatForLeads(chatUsername: string, limit: number = 50,
                     }
                 });
                 console.log(`[Scout] Saved scan history for chat ${scannedChat.id}`);
-            } catch (historyError) {
-                console.error(`[Scout] Failed to save history (non-critical):`, historyError);
+            } else {
+                console.warn(`[Scout] ScannedChat not found for ${chatUsername}, skipping history save.`);
             }
-        } else {
-            console.warn(`[Scout] ScannedChat not found for ${chatUsername}, skipping history save.`);
-            // Optionally create it? 
-            // For now, assume it exists or we skip history.
+        } catch (dbError) {
+            console.warn(`[Scout] DB error during history save (non-critical):`, dbError);
         }
 
         // Fetch Chat Title

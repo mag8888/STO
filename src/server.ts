@@ -735,15 +735,19 @@ fastify.get('/scout/chats/:username/leads', async (req, reply) => {
         let accessHash: string | undefined;
 
         // Find the chat in DB to get AccessHash if available
-        // Note: 'username' in DB might store the ID if no username exists
-        const chat = await prisma.scannedChat.findFirst({
-            where: {
-                OR: [
-                    { username: username }, // Matches stored ID or username
-                    { link: { contains: username } }
-                ]
-            }
-        });
+        let chat;
+        try {
+            chat = await prisma.scannedChat.findFirst({
+                where: {
+                    OR: [
+                        { username: username }, // Matches stored ID or username
+                        { link: { contains: username } }
+                    ]
+                }
+            });
+        } catch (dbErr) {
+            console.warn('[Scout] DB not available for finding chat (non-critical):', dbErr);
+        }
 
         if (chat) {
             if (chat.accessHash) {
@@ -756,10 +760,13 @@ fastify.get('/scout/chats/:username/leads', async (req, reply) => {
                         const entity = await client.getEntity(chat.link);
                         if (entity && (entity as any).accessHash) {
                             accessHash = (entity as any).accessHash.toString();
-                            await prisma.scannedChat.update({
-                                where: { id: chat.id },
-                                data: { accessHash: accessHash }
-                            });
+                            // Optional update try/catch
+                            try {
+                                await prisma.scannedChat.update({
+                                    where: { id: chat.id },
+                                    data: { accessHash: accessHash }
+                                });
+                            } catch (e) { /* ignore update fail */ }
                             console.log(`[Scout] create/update accessHash for ${chat.username}`);
                         }
                     }
