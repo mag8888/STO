@@ -432,5 +432,29 @@ registerAdminCommands(bot);
 const PORT = parseInt(process.env.PORT || "3000");
 startWebServer(PORT).catch(console.error);
 
+// Graceful shutdown — fixes 409 Conflict when Railway restarts
+async function shutdown() {
+    console.log("🛑 Shutting down bot...");
+    await bot.stop();
+    await prisma.$disconnect();
+    process.exit(0);
+}
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
+
 console.log("🚀 STO Automation Bot запущен...");
-bot.start();
+bot.start({
+    onStart: () => console.log("✅ Bot polling started"),
+}).catch((err: any) => {
+    // If 409 conflict — wait and retry after old instance dies
+    if (err?.error_code === 409) {
+        console.error("⚠️ 409 Conflict: another instance is running. Retrying in 5s...");
+        setTimeout(() => {
+            bot.start().catch(console.error);
+        }, 5000);
+    } else {
+        console.error("❌ Bot start error:", err.message);
+        process.exit(1);
+    }
+});
+
