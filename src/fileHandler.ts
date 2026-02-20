@@ -25,7 +25,7 @@ export async function downloadFile(fileUrl: string, filename: string): Promise<s
                     "Accept": "*/*",
                 }
             }, (res) => {
-                if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) && res.headers.location) {
+                if ([301, 302, 307].includes(res.statusCode!) && res.headers.location) {
                     return download(res.headers.location, redirects - 1);
                 }
                 if (res.statusCode !== 200) {
@@ -71,67 +71,58 @@ export function parseDriveUrl(url: string): { type: "file" | "folder"; id: strin
     return null;
 }
 
-/** List files in a public Google Drive folder by scraping the embedded JSON data */
+/**
+ * List files in a public Google Drive folder.
+ * Uses the verified pattern found in Drive's embedded HTML:
+ * "FILE_ID"],null,null,null,"MIME_TYPE" ... within 700 chars ... "FILENAME.ext"
+ */
 export async function listDriveFolder(folderId: string): Promise<DriveItem[]> {
-    // Fetch the folder page — Google embeds all file metadata as JSON in the HTML
     const url = `https://drive.google.com/drive/folders/${folderId}`;
     const res = await fetch(url, {
         headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120",
-            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
     });
 
-    if (!res.ok) throw new Error(`Cannot access folder: ${res.status}`);
+    if (!res.ok) throw new Error(`Cannot access Google Drive folder: ${res.status}`);
     const html = await res.text();
+
+    // Decode HTML entities — Drive embeds JSON with &quot; etc.
+    const decoded = html
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/&#39;/g, "'");
 
     const items: DriveItem[] = [];
     const seen = new Set<string>();
 
-    // Strategy 1: Extract from JSON blobs embedded in the page
-    // Google Drive embeds file data arrays in various wiz_jd / AF_initDataCallback calls
-    // Pattern: ["ID", "NAME", null, null, [...], null, null, null, "MIME_TYPE"]
-    // File IDs are 25-33 chars, alphanumeric + _ + -
+    // Verified pattern: file ID appears immediately before its MIME type in the embedded JSON blob
+    const MIMES = [
+        "application\\/pdf",
+        "image\\/jpeg", "image\\/png", "image\\/webp",
+        "application\\/vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document",
+        "application\\/msword",
+    ].join("|");
 
-    const idPattern = /["']([a-zA-Z0-9_-]{25,})['"]/g;
-    const nameAfterIdPattern = /["']([a-zA-Z0-9_-]{25,})['"]\s*,\s*["']([^"']{2,200})['"]/g;
+    const idAndMimeRe = new RegExp(
+        `"([a-zA-Z0-9_-]{25,})"[^\\]]*\\],null,null,null,"(${MIMES})"`,
+        "g"
+    );
 
-    let match;
+    let m: RegExpExecArray | null;
+    while ((m = idAndMimeRe.exec(decoded)) !== null) {
+        const id = m[1]!;
+        const mimeType = m[2]!;
+        if (seen.has(id)) continue;
 
-    // Look for MIME type arrays with names
-    const jsonBlocks = html.match(/\[\[["'][a-zA-Z0-9_-]{25,}["'],[^\]]{10,500}\]\]/g) || [];
-    for (const block of jsonBlocks) {
-        try {
-            // Try to extract id + name from the block
-            const idM = block.match(/["']([a-zA-Z0-9_-]{25,})['"]/);
-            const nameM = block.match(/["']([^\\"']{3,100}\.[a-zA-Z]{2,5})['"]/);
-            if (idM && nameM && !seen.has(idM[1]!)) {
-                const mimeType = guessType(nameM[1]!);
-                items.push({ id: idM[1]!, name: nameM[1]!, mimeType });
-                seen.add(idM[1]!);
-            }
-        } catch { }
-    }
-
-    // Strategy 2: Find filenames with extensions near IDs
-    // Scan for patterns like: "1abc...xyz","Заказ-наряд № 123.pdf"
-    const nameAndId = /["']([a-zA-Z0-9_-]{25,})['"]\s*,\s*["']([^"'\\]{2,150}\.[a-zA-Z]{2,5})['"]/g;
-    while ((match = nameAndId.exec(html)) !== null) {
-        const [, id, name] = match;
-        if (id && name && !seen.has(id)) {
+        // Filename appears within 700 chars of the ID, identified by having an extension
+        const chunk = decoded.substring(m.index, m.index + 700);
+        const fnMatch = chunk.match(/"([^"]{2,200}\.(?:pdf|PDF|docx|doc|jpg|jpeg|png|webp|xlsx|zip|rar))"/i);
+        if (fnMatch) {
             seen.add(id);
-            items.push({ id, name, mimeType: guessType(name) });
-        }
-    }
-
-    // Strategy 3: Reversed order — filename then ID (also common in Drive HTML)
-    const nameAndIdReverse = /["']([^"'\\]{2,150}\.[a-zA-Z]{2,5})['"]\s*,\s*["']([a-zA-Z0-9_-]{25,})['"]/g;
-    while ((match = nameAndIdReverse.exec(html)) !== null) {
-        const [, name, id] = match;
-        if (id && name && !seen.has(id)) {
-            seen.add(id);
-            items.push({ id, name, mimeType: guessType(name) });
+            items.push({ id, name: fnMatch[1]!.replace(/\n/g, " ").trim(), mimeType });
         }
     }
 
@@ -139,28 +130,12 @@ export async function listDriveFolder(folderId: string): Promise<DriveItem[]> {
     return items;
 }
 
-function guessType(filename: string): string {
-    const ext = filename.toLowerCase().split(".").pop() || "";
-    const map: Record<string, string> = {
-        pdf: "application/pdf",
-        jpg: "image/jpeg", jpeg: "image/jpeg",
-        png: "image/png", webp: "image/webp",
-        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        doc: "application/msword",
-        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        zip: "application/zip",
-        rar: "application/x-rar-compressed",
-    };
-    return map[ext] || "application/octet-stream";
-}
-
-/** Download a file from Google Drive (handles both small files and large files with virus scan confirmation) */
+/** Download a file from Google Drive, handling the virus-scan confirmation redirect */
 export async function downloadDriveFile(fileId: string, fileName: string): Promise<string> {
     ensureTempDir();
     const safeFileName = fileName.replace(/[^a-zA-Z0-9._\-а-яёА-ЯЁ]/g, "_");
     const filePath = path.join(TEMP_DIR, safeFileName);
 
-    // Use the usercontent URL which handles auth/redirects automatically
     const downloadUrl = `https://drive.usercontent.google.com/download?id=${fileId}&export=download&authuser=0&confirm=t`;
 
     return new Promise((resolve, reject) => {
@@ -174,34 +149,31 @@ export async function downloadDriveFile(fileId: string, fileName: string): Promi
                     "Cookie": "download_warning=t",
                 }
             }, (res) => {
-                // Follow redirects
                 if ([301, 302, 303, 307, 308].includes(res.statusCode!) && res.headers.location) {
                     return download(res.headers.location, redirects - 1);
                 }
-
                 if (res.statusCode !== 200) {
                     res.resume();
                     return reject(new Error(`HTTP ${res.statusCode} downloading file ${fileId}`));
                 }
 
-                // Check content type — if it's HTML, it's probably a confirm page
+                // If Google returns HTML (confirmation page), extract the real download link
                 const contentType = res.headers["content-type"] || "";
                 if (contentType.includes("text/html")) {
-                    // Read the HTML and look for the confirm download link
-                    let html = "";
-                    res.on("data", (chunk: Buffer) => { html += chunk.toString(); });
+                    let body = "";
+                    res.on("data", (chunk: Buffer) => { body += chunk.toString(); });
                     res.on("end", () => {
-                        const confirmMatch = html.match(/href="(\/uc\?[^"]*confirm=[^"]+)"/i)
-                            || html.match(/action="(https:\/\/drive\.usercontent[^"]+)"/i);
+                        const confirmMatch =
+                            body.match(/href="(\/uc\?[^"]*confirm=[^"]+)"/i) ||
+                            body.match(/action="(https:\/\/drive\.usercontent[^"]+)"/i);
                         if (confirmMatch) {
                             const confirmUrl = confirmMatch[1]!.startsWith("http")
                                 ? confirmMatch[1]!
                                 : `https://drive.google.com${confirmMatch[1]!}`;
                             download(confirmUrl.replace(/&amp;/g, "&"), redirects - 1);
                         } else {
-                            // Try alternative download URL
-                            const altUrl = `https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`;
-                            download(altUrl, redirects - 1);
+                            // Fallback: legacy uc endpoint
+                            download(`https://drive.google.com/uc?export=download&id=${fileId}&confirm=t`, redirects - 1);
                         }
                     });
                     return;
