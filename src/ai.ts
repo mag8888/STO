@@ -49,10 +49,10 @@ If items array is empty, set needsOperatorReview to true with reason "No items f
 async function pdfToImage(pdfPath: string): Promise<string> {
     // Dynamic import to avoid loading canvas at startup
     const { createCanvas } = await import("canvas");
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.js");
+    const pdfjsLib = await import("pdfjs-dist/build/pdf.mjs");
 
     const pdfData = new Uint8Array(fs.readFileSync(pdfPath));
-    const loadingTask = (pdfjsLib as any).getDocument({ data: pdfData, useSystemFonts: true });
+    const loadingTask = pdfjsLib.getDocument({ data: pdfData, useSystemFonts: true });
     const pdfDoc = await loadingTask.promise;
     const page = await pdfDoc.getPage(1);
 
