@@ -83,7 +83,8 @@ async function processSingleFile(
     batchId: number,
     stationId: number
 ): Promise<void> {
-    if (!isImageFile(fileName) && !isPdfFile(fileName)) return;
+    const lname = fileName.toLowerCase();
+    if (!isImageFile(fileName) && !isPdfFile(fileName) && !lname.endsWith(".docx") && !lname.endsWith(".doc")) return;
 
     const parsed = await extractOrderFromImage(filePath);
 
