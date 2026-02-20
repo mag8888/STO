@@ -3,11 +3,15 @@ import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
 import prisma from "./db.js";
-import { downloadFile, isImageFile, isPdfFile, isArchiveFile, cleanupFile } from "./fileHandler.js";
+import {
+    downloadFile, isImageFile, isPdfFile, isArchiveFile, cleanupFile,
+    parseDriveUrl, listDriveFolder, downloadDriveFile, type DriveItem
+} from "./fileHandler.js";
 import { extractOrderFromImage } from "./ai.js";
 import { fetchPricelist, findPriceItem } from "./sheets.js";
 import { extractArchive } from "./archiver.js";
 import { generateExcelReport, type ExportItem } from "./exporter.js";
+
 
 const bot = new Bot(process.env.BOT_TOKEN!);
 
@@ -302,9 +306,119 @@ bot.hears(/^ПРИНЯТО$/i, async (ctx) => {
     );
 });
 
+
+// ===== GOOGLE DRIVE LINK HANDLER =====
+// Usage: send a message like:
+//   https://drive.google.com/drive/folders/XXX          → process all files
+//   https://drive.google.com/drive/folders/XXX обработай 5  → process first 5
+//   https://drive.google.com/file/d/XXX                → process single file
+
+bot.on("message:text", async (ctx) => {
+    const text = ctx.message.text || "";
+
+    // Check if message contains a Google Drive URL
+    const driveUrlMatch = text.match(/https:\/\/drive\.google\.com\/[^\s]+/);
+    if (!driveUrlMatch) return;
+
+    const driveUrl = driveUrlMatch[0]!;
+    const parsed = parseDriveUrl(driveUrl);
+    if (!parsed) {
+        await ctx.reply("❌ Не удалось распознать ссылку на Google Drive.");
+        return;
+    }
+
+    // Parse optional limit: "обработай 5" or just number "5"
+    const limitMatch = text.match(/(\d+)/);
+    const limit = limitMatch ? parseInt(limitMatch[1]!) : null;
+
+    const chat = await ctx.getChat();
+    const chatName = chat.title || (chat as any).first_name || "Автосервис";
+    const station = await getOrCreateStation(BigInt(chat.id), chatName);
+
+    const statusMsg = await ctx.reply(
+        `🔗 Обрабатываю ссылку Google Drive...\n` +
+        (limit ? `📊 Лимит: ${limit} файлов` : `📊 Обработаю все файлы`),
+    );
+
+    try {
+        let filesToProcess: DriveItem[] = [];
+
+        if (parsed.type === "folder") {
+            await ctx.api.editMessageText(chat.id, statusMsg.message_id,
+                "🔍 Получаю список файлов из папки...");
+
+            const allFiles = await listDriveFolder(parsed.id);
+            const supportedFiles = allFiles.filter(f =>
+                f.mimeType.includes("pdf") ||
+                f.mimeType.includes("image") ||
+                f.mimeType.includes("jpeg") ||
+                f.mimeType.includes("png")
+            );
+
+            if (supportedFiles.length === 0) {
+                await ctx.api.editMessageText(chat.id, statusMsg.message_id,
+                    "❌ В папке не найдено поддерживаемых файлов (PDF, JPG, PNG).");
+                return;
+            }
+
+            filesToProcess = limit ? supportedFiles.slice(0, limit) : supportedFiles;
+
+            await ctx.api.editMessageText(chat.id, statusMsg.message_id,
+                `📁 Найдено файлов: ${supportedFiles.length}\n⏳ Обрабатываю: ${filesToProcess.length}...`);
+        } else {
+            // Single file
+            filesToProcess = [{ id: parsed.id, name: `file_${parsed.id}.pdf`, mimeType: "application/pdf" }];
+        }
+
+        // Create a batch for this session
+        const batch = await prisma.orderBatch.create({
+            data: {
+                serviceStationId: station.id,
+                weekStartDate: new Date(),
+                status: "PROCESSING",
+                rawFiles: JSON.stringify(filesToProcess.map(f => f.name)),
+            },
+        });
+
+        let processed = 0;
+        let failed = 0;
+
+        for (const driveFile of filesToProcess) {
+            let localPath: string | undefined;
+            try {
+                await ctx.api.editMessageText(chat.id, statusMsg.message_id,
+                    `⏳ Обрабатываю ${processed + 1}/${filesToProcess.length}: _${driveFile.name}_`,
+                    { parse_mode: "Markdown" }
+                );
+
+                localPath = await downloadDriveFile(driveFile.id, driveFile.name);
+                await processSingleFile(ctx, localPath, driveFile.name, batch.id, station.id);
+                processed++;
+            } catch (e: any) {
+                console.error(`Failed to process ${driveFile.name}:`, e.message);
+                failed++;
+            } finally {
+                if (localPath) cleanupFile(localPath);
+            }
+        }
+
+        await ctx.api.editMessageText(chat.id, statusMsg.message_id,
+            `✅ *Готово!*\n✔ Обработано: ${processed}\n❌ Ошибок: ${failed}\n\n` +
+            `Если всё верно — напишите *ПРИНЯТО*`,
+            { parse_mode: "Markdown" }
+        );
+
+    } catch (err: any) {
+        console.error("Drive link error:", err);
+        await ctx.api.editMessageText(chat.id, statusMsg.message_id,
+            `❌ Ошибка: ${err.message}`);
+    }
+});
+
 bot.catch((err) => {
     console.error("Bot error:", err.message);
 });
 
 console.log("🚀 STO Automation Bot запущен...");
 bot.start();
+
