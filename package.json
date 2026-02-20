@@ -23,10 +23,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/static": "^9.0.0",
     "@googleapis/drive": "^20.1.0",
     "@prisma/client": "5.10.2",
     "dotenv": "^17.3.1",
     "exceljs": "^4.4.0",
+    "fastify": "^5.7.4",
     "googleapis": "^171.4.0",
     "grammy": "^1.40.0",
     "node-unrar-js": "^2.0.2",

@@ -11,6 +11,8 @@ import { extractOrderFromImage } from "./ai.js";
 import { fetchPricelist, findPriceItem } from "./sheets.js";
 import { extractArchive } from "./archiver.js";
 import { generateExcelReport, type ExportItem } from "./exporter.js";
+import { registerAdminCommands } from "./admin.js";
+import { startWebServer } from "./webServer.js";
 
 
 const bot = new Bot(process.env.BOT_TOKEN!);
@@ -419,6 +421,12 @@ bot.catch((err) => {
     console.error("Bot error:", err.message);
 });
 
+// Register admin bot commands
+registerAdminCommands(bot);
+
+// Start web admin panel
+const PORT = parseInt(process.env.PORT || "3000");
+startWebServer(PORT).catch(console.error);
+
 console.log("🚀 STO Automation Bot запущен...");
 bot.start();
-

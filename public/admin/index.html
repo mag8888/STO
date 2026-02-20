@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STO Admin — Панель управления</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117;
+  --sidebar-bg: #161b27;
+  --card-bg: #1a2035;
+  --card-hover: #1f2845;
+  --border: #2a3250;
+  --accent: #4f8ef7;
+  --accent-light: #6ba3ff;
+  --green: #22c55e;
+  --yellow: #f59e0b;
+  --red: #ef4444;
+  --text: #e2e8f0;
+  --text-muted: #7a8aaa;
+  --radius: 12px;
+}
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+/* ─── LOGIN ─────────────── */
+#login-screen {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; min-height: 100vh;
+  background: radial-gradient(ellipse at 50% 0%, rgba(79,142,247,0.15) 0%, transparent 70%);
+}
+.login-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 20px; padding: 44px 48px; width: 380px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+}
+.login-card h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.login-card p { color: var(--text-muted); font-size: 14px; margin-bottom: 32px; }
+.login-logo { font-size: 36px; margin-bottom: 20px; }
+label { display: block; font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 8px; }
+input[type=password], input[type=text] {
+  width: 100%; background: #0f1117; border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 16px; color: var(--text);
+  font-size: 15px; font-family: inherit; transition: border-color .2s;
+}
+input:focus { outline: none; border-color: var(--accent); }
+.btn {
+  width: 100%; padding: 13px; background: var(--accent);
+  color: white; border: none; border-radius: 10px; font-size: 15px;
+  font-weight: 600; cursor: pointer; margin-top: 20px;
+  font-family: inherit; transition: background .2s, transform .1s;
+}
+.btn:hover { background: var(--accent-light); }
+.btn:active { transform: scale(0.98); }
+.error-msg { color: var(--red); font-size: 13px; margin-top: 12px; text-align: center; min-height: 18px; }
+
+/* ─── SIDEBAR ─────────────── */
+#app { display: none; width: 100%; min-height: 100vh; }
+.sidebar {
+  width: 240px; background: var(--sidebar-bg); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; position: fixed; height: 100vh; left: 0; top: 0; overflow-y: auto;
+}
+.sidebar-logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.sidebar-logo .logo-icon { font-size: 28px; }
+.sidebar-logo h2 { font-size: 16px; font-weight: 700; margin-top: 8px; }
+.sidebar-logo p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+nav { flex: 1; padding: 8px 12px; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 10px; cursor: pointer;
+  font-size: 14px; font-weight: 500; color: var(--text-muted);
+  transition: all .2s; margin-bottom: 3px;
+}
+.nav-item:hover { background: rgba(79,142,247,0.1); color: var(--text); }
+.nav-item.active { background: rgba(79,142,247,0.15); color: var(--accent); }
+.nav-item .icon { font-size: 18px; width: 22px; text-align: center; }
+.sidebar-footer { padding: 16px 12px; border-top: 1px solid var(--border); }
+.logout-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 14px; border-radius: 10px; background: none;
+  border: none; color: var(--text-muted); cursor: pointer; font-size: 14px;
+  font-family: inherit; transition: all .2s;
+}
+.logout-btn:hover { background: rgba(239,68,68,0.1); color: var(--red); }
+
+/* ─── MAIN ────────────────── */
+.main { margin-left: 240px; padding: 32px; flex: 1; min-height: 100vh; }
+.page { display: none; animation: fadeIn .2s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+.page-header { margin-bottom: 28px; }
+.page-header h1 { font-size: 26px; font-weight: 700; }
+.page-header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+/* ─── STAT CARDS ──────────── */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+.stat-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; transition: all .2s;
+}
+.stat-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.stat-label { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 10px; }
+.stat-value { font-size: 32px; font-weight: 700; }
+.stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.stat-icon { font-size: 28px; margin-bottom: 12px; }
+
+/* ─── TABLE ───────────────── */
+.card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid var(--border);
+}
+.card-header h3 { font-size: 15px; font-weight: 600; }
+.filter-row { display: flex; gap: 10px; align-items: center; }
+select {
+  background: #0f1117; border: 1px solid var(--border); color: var(--text);
+  padding: 8px 12px; border-radius: 8px; font-size: 13px; font-family: inherit; cursor: pointer;
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; padding: 13px 18px; font-size: 12px;
+  color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
+  border-bottom: 1px solid var(--border); background: rgba(255,255,255,.02);
+}
+td { padding: 14px 18px; font-size: 14px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--card-hover); }
+
+/* ─── BADGES ──────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+}
+.badge-green { background: rgba(34,197,94,.12); color: var(--green); }
+.badge-yellow { background: rgba(245,158,11,.12); color: var(--yellow); }
+.badge-blue { background: rgba(79,142,247,.12); color: var(--accent); }
+
+/* ─── BUTTONS ─────────────── */
+.btn-sm {
+  padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  border: none; cursor: pointer; font-family: inherit; transition: all .2s;
+}
+.btn-approve { background: rgba(34,197,94,.15); color: var(--green); }
+.btn-approve:hover { background: rgba(34,197,94,.3); }
+.btn-export { background: rgba(79,142,247,.15); color: var(--accent); }
+.btn-export:hover { background: rgba(79,142,247,.3); }
+.btn-view { background: rgba(255,255,255,.06); color: var(--text); }
+.btn-view:hover { background: rgba(255,255,255,.12); }
+.btn-primary {
+  background: var(--accent); color: white; padding: 9px 18px;
+  border-radius: 9px; border: none; font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: background .2s;
+}
+.btn-primary:hover { background: var(--accent-light); }
+.actions { display: flex; gap: 8px; }
+
+/* ─── MODAL ───────────────── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65);
+  z-index: 1000; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: 18px; padding: 32px; width: 640px; max-width: 95%;
+  max-height: 85vh; overflow-y: auto; box-shadow: 0 40px 80px rgba(0,0,0,.5);
+}
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.modal-header h2 { font-size: 18px; font-weight: 700; }
+.modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 22px; }
+.modal-close:hover { color: var(--red); }
+.modal-items { /* list of items */ }
+.item-row {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 12px 0; border-bottom: 1px solid var(--border); gap: 12px;
+}
+.item-row:last-child { border-bottom: none; }
+.item-name { font-size: 14px; font-weight: 500; flex: 1; }
+.item-warn { font-size: 12px; color: var(--yellow); margin-top: 3px; }
+.item-price { text-align: right; }
+.item-qty { font-size: 12px; color: var(--text-muted); }
+.item-total { font-size: 15px; font-weight: 700; color: var(--accent); }
+
+.loading { text-align: center; padding: 60px; color: var(--text-muted); font-size: 15px; }
+.empty { text-align: center; padding: 60px; color: var(--text-muted); }
+.empty .icon { font-size: 48px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">🚗</div>
+    <h1>STO Admin</h1>
+    <p>Панель управления заказ-нарядами</p>
+    <label>Пароль администратора</label>
+    <input type="password" id="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') login()">
+    <button class="btn" onclick="login()">Войти</button>
+    <p class="error-msg" id="login-error"></p>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🚗</div>
+      <h2>STO Admin</h2>
+      <p>Панель управления</p>
+    </div>
+    <nav>
+      <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+        <span class="icon">📊</span> Дашборд
+      </div>
+      <div class="nav-item" onclick="showPage('batches')" id="nav-batches">
+        <span class="icon">📋</span> Пакеты
+      </div>
+      <div class="nav-item" onclick="showPage('stations')" id="nav-stations">
+        <span class="icon">🏭</span> Автосервисы
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="logout-btn" onclick="logout()">
+        <span>🚪</span> Выйти
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h1>Дашборд</h1>
+        <p id="dashboard-date"></p>
+      </div>
+      <div class="stat-grid" id="stat-grid"></div>
+      <div class="card">
+        <div class="card-header">
+          <h3>⚠️ Требуют проверки</h3>
+          <button class="btn-primary" onclick="exportAll()">📥 Выгрузить все в Excel</button>
+        </div>
+        <div id="pending-table"><div class="loading">Загрузка...</div></div>
+      </div>
+    </div>
+
+    <!-- BATCHES -->
+    <div class="page" id="page-batches">
+      <div class="page-header">
+        <h1>Пакеты заказ-нарядов</h1>
+        <p>Все входящие пакеты</p>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h3>Список пакетов</h3>
+          <div class="filter-row">
+            <select id="status-filter" onchange="loadBatches()">
+              <option value="">Все статусы</option>
+              <option value="NEEDS_REVIEW">⚠️ На проверке</option>
+              <option value="PROCESSING">⏳ В обработке</option>
+              <option value="APPROVED">✅ Подтверждены</option>
+            </select>
+          </div>
+        </div>
+        <div id="batches-table"><div class="loading">Загрузка...</div></div>
+      </div>
+    </div>
+
+    <!-- STATIONS -->
+    <div class="page" id="page-stations">
+      <div class="page-header">
+        <h1>Автосервисы</h1>
+        <p>Зарегистрированные автосервисы</p>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Список автосервисов</h3></div>
+        <div id="stations-table"><div class="loading">Загрузка...</div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- BATCH DETAIL MODAL -->
+<div class="modal-overlay" id="batch-modal" onclick="if(event.target===this) closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">Детали пакета</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-meta" style="margin-bottom:20px; color:var(--text-muted); font-size:14px;"></div>
+    <div class="actions" style="margin-bottom:20px;" id="modal-actions"></div>
+    <div class="modal-items" id="modal-items"></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let token = '';
+let currentBatchId = null;
+
+// ─────────────── AUTH ───────────────
+async function login() {
+  const pw = document.getElementById('password').value;
+  const res = await fetch(`${API}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: pw })
+  });
+  const data = await res.json();
+  if (data.ok) {
+    token = data.token;
+    localStorage.setItem('sto_token', token);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  } else {
+    document.getElementById('login-error').textContent = data.error || 'Ошибка входа';
+  }
+}
+
+function logout() {
+  localStorage.removeItem('sto_token');
+  location.reload();
+}
+
+function authHeaders() { return { 'Authorization': `Bearer ${token}` }; }
+
+async function api(path) {
+  const res = await fetch(`${API}${path}`, { headers: authHeaders() });
+  if (res.status === 401) { logout(); return null; }
+  return res.json();
+}
+
+async function apiPut(path, body = {}) {
+  const res = await fetch(`${API}${path}`, {
+    method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ─────────────── INIT ───────────────
+function initApp() {
+  const saved = localStorage.getItem('sto_token');
+  if (saved) token = saved;
+  document.getElementById('dashboard-date').textContent = new Date().toLocaleDateString('ru-RU', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  loadDashboard();
+}
+
+window.onload = () => {
+  const saved = localStorage.getItem('sto_token');
+  if (saved) {
+    token = saved;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    initApp();
+  }
+};
+
+// ─────────────── NAVIGATION ───────────────
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.getElementById(`nav-${page}`).classList.add('active');
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'batches') loadBatches();
+  if (page === 'stations') loadStations();
+}
+
+// ─────────────── DASHBOARD ───────────────
+async function loadDashboard() {
+  const stats = await api('/api/stats');
+  if (!stats) return;
+
+  document.getElementById('stat-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-icon">🏭</div>
+      <div class="stat-label">Автосервисов</div>
+      <div class="stat-value">${stats.stations}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⚠️</div>
+      <div class="stat-label">На проверке</div>
+      <div class="stat-value" style="color:var(--yellow)">${stats.pendingBatches}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✅</div>
+      <div class="stat-label">Подтверждено</div>
+      <div class="stat-value" style="color:var(--green)">${stats.approvedBatches}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">💰</div>
+      <div class="stat-label">Общая сумма</div>
+      <div class="stat-value" style="font-size:22px">${Number(stats.totalAmount).toLocaleString('ru-RU')} ₽</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📋</div>
+      <div class="stat-label">Позиций всего</div>
+      <div class="stat-value">${stats.totalItems}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📅</div>
+      <div class="stat-label">За эту неделю</div>
+      <div class="stat-value" style="color:var(--accent)">${stats.weeklyBatches}</div>
+      <div class="stat-sub">пакетов</div>
+    </div>
+  `;
+
+  // Load pending batches
+  const batches = await api('/api/batches?status=NEEDS_REVIEW');
+  if (!batches) return;
+  renderBatchesTable('pending-table', batches, true);
+}
+
+// ─────────────── BATCHES ───────────────
+async function loadBatches() {
+  const status = document.getElementById('status-filter')?.value || '';
+  const batches = await api(`/api/batches${status ? `?status=${status}` : ''}`);
+  if (!batches) return;
+  renderBatchesTable('batches-table', batches, false);
+}
+
+function statusBadge(s) {
+  if (s === 'APPROVED') return '<span class="badge badge-green">✅ Подтверждён</span>';
+  if (s === 'NEEDS_REVIEW') return '<span class="badge badge-yellow">⚠️ Проверка</span>';
+  return '<span class="badge badge-blue">⏳ Обработка</span>';
+}
+
+function renderBatchesTable(containerId, batches, compact) {
+  const el = document.getElementById(containerId);
+  if (!batches.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📭</div><p>Пакетов нет</p></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>#</th><th>Автосервис</th><th>Неделя</th>
+      <th>Позиций</th><th>Статус</th><th>Действия</th>
+    </tr></thead>
+    <tbody>${batches.map(b => `
+      <tr>
+        <td style="color:var(--text-muted);">#${b.id}</td>
+        <td><strong>${b.serviceStation?.name || '—'}</strong></td>
+        <td>${new Date(b.weekStartDate).toLocaleDateString('ru-RU')}</td>
+        <td>${b._count?.Items ?? '—'}</td>
+        <td>${statusBadge(b.status)}</td>
+        <td><div class="actions">
+          <button class="btn-sm btn-view" onclick="viewBatch(${b.id})">👁 Детали</button>
+          ${b.status !== 'APPROVED' ? `<button class="btn-sm btn-approve" onclick="approveBatch(${b.id})">✅</button>` : ''}
+          <button class="btn-sm btn-export" onclick="exportBatch(${b.id})">📥</button>
+        </div></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ─────────────── STATIONS ───────────────
+async function loadStations() {
+  const stations = await api('/api/stations');
+  if (!stations) return;
+  const el = document.getElementById('stations-table');
+  if (!stations.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🏭</div><p>Нет зарегистрированных сервисов</p></div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>#</th><th>Название</th><th>Chat ID</th><th>Пакетов</th><th>Добавлен</th></tr></thead>
+    <tbody>${stations.map(s => `
+      <tr>
+        <td style="color:var(--text-muted)">#${s.id}</td>
+        <td><strong>${s.name || 'Без названия'}</strong></td>
+        <td style="font-family:monospace;font-size:12px;color:var(--text-muted)">${s.chatId}</td>
+        <td>${s._count?.Batches ?? 0}</td>
+        <td>${new Date(s.createdAt).toLocaleDateString('ru-RU')}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+// ─────────────── MODAL ───────────────
+async function viewBatch(id) {
+  currentBatchId = id;
+  const batch = await api(`/api/batches/${id}`);
+  if (!batch) return;
+
+  document.getElementById('modal-title').textContent = `Пакет #${id} — ${batch.serviceStation?.name || ''}`;
+  document.getElementById('modal-meta').innerHTML =
+    `📅 ${new Date(batch.weekStartDate).toLocaleDateString('ru-RU')} &nbsp;|&nbsp;
+     ${statusBadge(batch.status)} &nbsp;|&nbsp;
+     📦 ${batch.Items.length} позиций`;
+
+  document.getElementById('modal-actions').innerHTML = batch.status !== 'APPROVED'
+    ? `<button class="btn-primary" onclick="approveBatch(${id})">✅ Подтвердить</button>
+       <button class="btn-sm btn-export" style="padding:9px 18px" onclick="exportBatch(${id})">📥 Скачать Excel</button>`
+    : `<button class="btn-sm btn-export" style="padding:9px 18px" onclick="exportBatch(${id})">📥 Скачать Excel</button>`;
+
+  const total = batch.Items.reduce((s, i) => s + i.total, 0);
+  document.getElementById('modal-items').innerHTML =
+    batch.Items.map(item => `
+      <div class="item-row">
+        <div>
+          <div class="item-name">${item.workName}</div>
+          ${item.validationError ? `<div class="item-warn">⚠️ ${item.validationError}</div>` : ''}
+        </div>
+        <div class="item-price">
+          <div class="item-qty">${item.quantity} × ${item.price.toLocaleString('ru-RU')} ₽</div>
+          <div class="item-total">${item.total.toLocaleString('ru-RU')} ₽</div>
+        </div>
+      </div>`).join('') +
+    `<div style="text-align:right;margin-top:16px;font-size:18px;font-weight:700">
+       Итого: ${total.toLocaleString('ru-RU')} ₽
+     </div>`;
+
+  document.getElementById('batch-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('batch-modal').classList.remove('open');
+  currentBatchId = null;
+}
+
+async function approveBatch(id) {
+  await apiPut(`/api/batches/${id}/approve`);
+  closeModal();
+  loadDashboard();
+  if (document.getElementById('page-batches').classList.contains('active')) loadBatches();
+}
+
+function exportBatch(id) {
+  window.open(`${API}/api/batches/${id}/export?auth=${token}`, '_blank');
+  // We pass token via query too for file downloads
+  const url = `/api/batches/${id}/export`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.click();
+}
+
+function exportAll() {
+  const a = document.createElement('a');
+  a.href = `/api/export/all`;
+  a.click();
+}
+
+// Set auth header on export clicks by replacing fetch
+const origFetch = window.fetch;
+window.fetch = (url, opts = {}) => {
+  if (typeof url === 'string' && url.startsWith('/api')) {
+    opts.headers = { ...(opts.headers || {}), 'Authorization': `Bearer ${token}` };
+  }
+  return origFetch(url, opts);
+};
+</script>
+</body>
+</html>
