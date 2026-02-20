@@ -36,9 +36,11 @@ function getWeekLabel(date: Date): string {
 function formatSummary(
     fileName: string,
     parsed: any,
-    priceWarnings: string[]
+    priceWarnings: string[],
+    stationName?: string
 ): string {
     let msg = `📋 *Результат распознавания*\n`;
+    if (stationName) msg += `🏭 Автосервис: *${stationName}*\n`;
     msg += `📄 Файл: \`${fileName}\`\n\n`;
     msg += `🚗 Госномер: *${parsed.plateNumber || "❓ Не найден"}*\n`;
     if (parsed.vin) msg += `🔢 VIN: \`${parsed.vin}\`\n`;
@@ -81,7 +83,8 @@ async function processSingleFile(
     filePath: string,
     fileName: string,
     batchId: number,
-    stationId: number
+    stationId: number,
+    stationName?: string
 ): Promise<void> {
     const lname = fileName.toLowerCase();
     if (!isImageFile(fileName) && !isPdfFile(fileName) && !lname.endsWith(".docx") && !lname.endsWith(".doc")) return;
@@ -118,7 +121,7 @@ async function processSingleFile(
         });
     }
 
-    const summary = formatSummary(fileName, parsed, priceWarnings);
+    const summary = formatSummary(fileName, parsed, priceWarnings, stationName);
     await ctx.reply(summary, { parse_mode: "Markdown" });
 }
 
@@ -248,7 +251,7 @@ bot.on(["message:photo", "message:document"], async (ctx) => {
             for (const extractedFile of extracted) {
                 const baseName = path.basename(extractedFile);
                 if (isImageFile(baseName) || isPdfFile(baseName)) {
-                    await processSingleFile(ctx, extractedFile, baseName, batch.id, station.id);
+                    await processSingleFile(ctx, extractedFile, baseName, batch.id, station.id, station.name || chatName);
                     processed++;
                 }
                 cleanupFile(extractedFile);
@@ -257,7 +260,7 @@ bot.on(["message:photo", "message:document"], async (ctx) => {
             fs.rmSync(extractDir, { recursive: true, force: true });
             await ctx.reply(`✅ Из архива обработано файлов: *${processed}*\n\nЕсли всё верно, напишите *ПРИНЯТО*`, { parse_mode: "Markdown" });
         } else if (isImageFile(fileName) || isPdfFile(fileName)) {
-            await processSingleFile(ctx, filePath, fileName, batch.id, station.id);
+            await processSingleFile(ctx, filePath, fileName, batch.id, station.id, station.name || chatName);
             await ctx.reply(`\nЕсли всё верно, напишите *ПРИНЯТО*. Иначе пришлите исправленный файл.`, { parse_mode: "Markdown" });
         } else {
             await ctx.api.editMessageText(chat.id, processingMsg.message_id,
@@ -395,7 +398,7 @@ bot.on("message:text", async (ctx) => {
                 );
 
                 localPath = await downloadDriveFile(driveFile.id, driveFile.name);
-                await processSingleFile(ctx, localPath, driveFile.name, batch.id, station.id);
+                await processSingleFile(ctx, localPath, driveFile.name, batch.id, station.id, station.name || chatName);
                 processed++;
             } catch (e: any) {
                 console.error(`Failed to process ${driveFile.name}:`, e.message);
