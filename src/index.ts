@@ -1,9 +1,13 @@
-import { Bot } from "grammy";
+import { Bot, InputFile } from "grammy";
 import "dotenv/config";
+import * as fs from "fs";
+import * as path from "path";
 import prisma from "./db.js";
-import { downloadFile, isImageFile, isPdfFile, cleanupFile } from "./fileHandler.js";
+import { downloadFile, isImageFile, isPdfFile, isArchiveFile, cleanupFile } from "./fileHandler.js";
 import { extractOrderFromImage } from "./ai.js";
 import { fetchPricelist, findPriceItem } from "./sheets.js";
+import { extractArchive } from "./archiver.js";
+import { generateExcelReport, type ExportItem } from "./exporter.js";
 
 const bot = new Bot(process.env.BOT_TOKEN!);
 
@@ -17,31 +21,98 @@ async function getOrCreateStation(chatId: bigint, chatName: string) {
     });
 }
 
-function formatSummary(orders: any[], priceWarnings: string[]): string {
-    if (orders.length === 0) return "❌ Заказ-нарядов не обнаружено.";
+function getWeekLabel(date: Date): string {
+    const d = new Date(date);
+    d.setDate(d.getDate() - d.getDay() + 1);
+    return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
 
-    let msg = `📋 *Резюме обработки*\n\n`;
-    orders.forEach((o, i) => {
-        msg += `*Заказ-наряд ${i + 1}*\n`;
-        msg += `🚗 Госномер: ${o.plateNumber || "❓ Не указан"}\n`;
-        msg += `📍 Город: ${o.city || "❓ Не указан"}\n`;
-        msg += `🛣 Пробег: ${o.mileage ? o.mileage + " км" : "❓ Не указан"}\n`;
-        msg += `📦 Позиций: ${o.items?.length || 0}\n`;
+function formatSummary(
+    fileName: string,
+    parsed: any,
+    priceWarnings: string[]
+): string {
+    let msg = `📋 *Результат распознавания*\n`;
+    msg += `📄 Файл: \`${fileName}\`\n\n`;
+    msg += `🚗 Госномер: *${parsed.plateNumber || "❓ Не найден"}*\n`;
+    if (parsed.vin) msg += `🔢 VIN: \`${parsed.vin}\`\n`;
+    msg += `📍 Город: ${parsed.city || "❓"}\n`;
+    msg += `🛣 Пробег: ${parsed.mileage ? parsed.mileage + " км" : "❓"}\n`;
+    msg += `📦 Позиций: ${parsed.items?.length || 0}\n\n`;
 
-        if (o.needsOperatorReview) {
-            msg += `⚠️ *Требует проверки*: ${o.reviewReason}\n`;
+    if (parsed.items?.length > 0) {
+        msg += `*Позиции:*\n`;
+        const MAX_ITEMS = 10;
+        parsed.items.slice(0, MAX_ITEMS).forEach((item: any, i: number) => {
+            msg += `${i + 1}. ${item.workName}\n`;
+            msg += `   ${item.quantity} × ${item.price} = *${item.total} руб.*\n`;
+        });
+        if (parsed.items.length > MAX_ITEMS) {
+            msg += `_...и ещё ${parsed.items.length - MAX_ITEMS} позиций_\n`;
         }
+    }
 
-        const total = o.items?.reduce((sum: number, i: any) => sum + (i.total || 0), 0) || 0;
-        msg += `💰 Итого: ${total.toLocaleString("ru-RU")} руб.\n\n`;
-    });
+    const total = parsed.items?.reduce((s: number, i: any) => s + (i.total || 0), 0) || 0;
+    msg += `\n💰 *Итого: ${total.toLocaleString("ru-RU")} руб.*\n`;
 
     if (priceWarnings.length > 0) {
-        msg += `\n⚠️ *Превышения по прайсу:*\n`;
-        priceWarnings.forEach((w) => (msg += `• ${w}\n`));
+        msg += `\n⚠️ *Превышения по прайсу (${priceWarnings.length}):*\n`;
+        priceWarnings.forEach(w => { msg += `• ${w}\n`; });
+    }
+
+    if (parsed.needsOperatorReview) {
+        msg += `\n🔴 *ТРЕБУЕТ ПРОВЕРКИ ОПЕРАТОРОМ*\n`;
+        if (parsed.reviewReason) msg += `Причина: _${parsed.reviewReason}_\n`;
+    } else if (priceWarnings.length === 0) {
+        msg += `\n✅ *Готов к загрузке в 1С*\n`;
     }
 
     return msg;
+}
+
+async function processSingleFile(
+    ctx: any,
+    filePath: string,
+    fileName: string,
+    batchId: number,
+    stationId: number
+): Promise<void> {
+    if (!isImageFile(fileName) && !isPdfFile(fileName)) return;
+
+    const parsed = await extractOrderFromImage(filePath);
+
+    // Price validation
+    const priceWarnings: string[] = [];
+    try {
+        const pricelist = await fetchPricelist();
+        for (const item of parsed.items) {
+            const priceItem = findPriceItem(item.workName, pricelist);
+            if (priceItem && priceItem.price > 0 && item.price > priceItem.price) {
+                priceWarnings.push(
+                    `"${item.workName}": ${item.price} руб. → прайс ${priceItem.price} руб.`
+                );
+            }
+        }
+    } catch { }
+
+    // Save items to DB
+    for (const item of parsed.items) {
+        await prisma.orderItem.create({
+            data: {
+                batchId,
+                workName: item.workName,
+                quantity: item.quantity,
+                price: item.price,
+                total: item.total,
+                vin: parsed.vin,
+                mileage: parsed.mileage,
+                validationError: priceWarnings.length > 0 ? priceWarnings.join("; ") : null,
+            },
+        });
+    }
+
+    const summary = formatSummary(fileName, parsed, priceWarnings);
+    await ctx.reply(summary, { parse_mode: "Markdown" });
 }
 
 // ===== COMMANDS =====
@@ -56,20 +127,62 @@ bot.command("start", async (ctx) => {
         `✅ *STO Automation Bot* запущен!\n\n` +
         `📌 Автосервис: *${station.name}*\n` +
         `🆔 Chat ID: \`${chat.id}\`\n\n` +
-        `Отправьте файл заказ-наряда (PDF, фото) для обработки.`,
+        `Отправьте файл заказ-наряда (PDF, фото, ZIP, RAR) для обработки.\n` +
+        `Напишите *ПРИНЯТО* для финального подтверждения.`,
         { parse_mode: "Markdown" }
     );
 });
 
-bot.command("help", async (ctx) => {
-    await ctx.reply(
-        `*Команды бота:*\n\n` +
-        `/start — Регистрация автосервиса\n` +
-        `/help — Справка\n\n` +
-        `*Отправьте файл* (PDF, JPG, PNG) для распознавания заказ-наряда.\n` +
-        `Напишите *ПРИНЯТО* для подтверждения пакета.`,
-        { parse_mode: "Markdown" }
-    );
+bot.command("export", async (ctx) => {
+    const chat = await ctx.getChat();
+    const station = await prisma.serviceStation.findUnique({
+        where: { chatId: BigInt(chat.id) },
+        include: {
+            Batches: {
+                where: { status: "APPROVED" },
+                include: { Items: true },
+                orderBy: { createdAt: "desc" },
+                take: 10,
+            },
+        },
+    });
+
+    if (!station || station.Batches.length === 0) {
+        await ctx.reply("❌ Нет подтверждённых пакетов для выгрузки.");
+        return;
+    }
+
+    const exportItems: ExportItem[] = [];
+    for (const batch of station.Batches) {
+        for (const item of batch.Items) {
+            exportItems.push({
+                serviceStation: station.name || "Неизвестно",
+                weekDate: getWeekLabel(batch.weekStartDate),
+                plateNumber: item.vin || "—",
+                vin: item.vin || undefined,
+                mileage: item.mileage || undefined,
+                city: undefined,
+                workName: item.workName,
+                quantity: item.quantity,
+                price: item.price,
+                total: item.total,
+            });
+        }
+    }
+
+    if (exportItems.length === 0) {
+        await ctx.reply("❌ Нет данных для выгрузки.");
+        return;
+    }
+
+    const reportPath = `./temp/export_${Date.now()}.xlsx`;
+    await generateExcelReport(exportItems, reportPath);
+
+    await ctx.replyWithDocument(new InputFile(reportPath, `1C_Заказ-наряды_${getWeekLabel(new Date())}.xlsx`), {
+        caption: `📊 Выгрузка для 1С\n${exportItems.length} позиций из ${station.Batches.length} пакетов`,
+    });
+
+    cleanupFile(reportPath);
 });
 
 // ===== FILE HANDLING =====
@@ -96,7 +209,7 @@ bot.on(["message:photo", "message:document"], async (ctx) => {
         return;
     }
 
-    const processingMsg = await ctx.reply("⏳ Обрабатываю заказ-наряд...");
+    const processingMsg = await ctx.reply(`⏳ Обрабатываю: *${fileName}*...`, { parse_mode: "Markdown" });
 
     let filePath: string | undefined;
     try {
@@ -104,82 +217,69 @@ bot.on(["message:photo", "message:document"], async (ctx) => {
         const telegramFileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
         filePath = await downloadFile(telegramFileUrl, fileName);
 
-        let parsed;
-        if (isImageFile(fileName) || isPdfFile(fileName)) {
-            parsed = await extractOrderFromImage(filePath);
-        } else {
-            await ctx.api.editMessageText(chat.id, processingMsg.message_id,
-                "⚠️ Формат пока не поддерживается. Поддерживаются: JPG, PNG, PDF.");
-            return;
-        }
-
-        // Price validation against Google Sheets pricelist
-        const priceWarnings: string[] = [];
-        try {
-            const pricelist = await fetchPricelist();
-            for (const item of parsed.items) {
-                const priceItem = findPriceItem(item.workName, pricelist);
-                if (priceItem && priceItem.price > 0 && item.price > priceItem.price) {
-                    priceWarnings.push(
-                        `"${item.workName}": в наряде ${item.price} руб., прайс ${priceItem.price} руб. (превышение +${(item.price - priceItem.price).toFixed(0)} руб.)`
-                    );
-                }
-            }
-        } catch (priceErr: any) {
-            console.warn("Price check skipped:", priceErr.message);
-        }
-
-        // Save to DB
+        // Create batch
         const batch = await prisma.orderBatch.create({
             data: {
                 serviceStationId: station.id,
                 weekStartDate: new Date(),
-                status: parsed.needsOperatorReview || priceWarnings.length > 0 ? "NEEDS_REVIEW" : "PROCESSING",
+                status: "PROCESSING",
                 rawFiles: JSON.stringify([fileName]),
             },
         });
 
-        for (const item of parsed.items) {
-            await prisma.orderItem.create({
-                data: {
-                    batchId: batch.id,
-                    workName: item.workName,
-                    quantity: item.quantity,
-                    price: item.price,
-                    total: item.total,
-                    vin: parsed.vin,
-                    mileage: parsed.mileage,
-                    validationError: parsed.needsOperatorReview ? parsed.reviewReason : null,
-                },
-            });
+        if (isArchiveFile(fileName)) {
+            // Extract archive and process each file
+            const extractDir = `./temp/extracted_${Date.now()}`;
+            const extracted = await extractArchive(filePath, extractDir);
+
+            await ctx.api.editMessageText(chat.id, processingMsg.message_id,
+                `📦 Архив распакован. Найдено файлов: *${extracted.length}*\nОбрабатываю...`,
+                { parse_mode: "Markdown" }
+            );
+
+            let processed = 0;
+            for (const extractedFile of extracted) {
+                const baseName = path.basename(extractedFile);
+                if (isImageFile(baseName) || isPdfFile(baseName)) {
+                    await processSingleFile(ctx, extractedFile, baseName, batch.id, station.id);
+                    processed++;
+                }
+                cleanupFile(extractedFile);
+            }
+
+            fs.rmSync(extractDir, { recursive: true, force: true });
+            await ctx.reply(`✅ Из архива обработано файлов: *${processed}*\n\nЕсли всё верно, напишите *ПРИНЯТО*`, { parse_mode: "Markdown" });
+        } else if (isImageFile(fileName) || isPdfFile(fileName)) {
+            await processSingleFile(ctx, filePath, fileName, batch.id, station.id);
+            await ctx.reply(`\nЕсли всё верно, напишите *ПРИНЯТО*. Иначе пришлите исправленный файл.`, { parse_mode: "Markdown" });
+        } else {
+            await ctx.api.editMessageText(chat.id, processingMsg.message_id,
+                "⚠️ Формат не поддерживается. Поддерживаются: JPG, PNG, PDF, ZIP, RAR.");
         }
 
-        const summary = formatSummary([parsed], priceWarnings);
-        await ctx.api.editMessageText(chat.id, processingMsg.message_id, summary, {
-            parse_mode: "Markdown",
-        });
+        // Delete processing message
+        try { await ctx.api.deleteMessage(chat.id, processingMsg.message_id); } catch { }
 
     } catch (err: any) {
         console.error("Processing error:", err);
-        await ctx.api.editMessageText(
-            chat.id, processingMsg.message_id,
-            `❌ Ошибка обработки: ${err.message}`
-        );
+        await ctx.api.editMessageText(chat.id, processingMsg.message_id,
+            `❌ Ошибка обработки: ${err.message}`);
     } finally {
         if (filePath) cleanupFile(filePath);
     }
 });
 
-// Handle operator confirmation
+// === ПРИНЯТО command ===
 bot.hears(/^ПРИНЯТО$/i, async (ctx) => {
     const chat = await ctx.getChat();
     const station = await prisma.serviceStation.findUnique({
         where: { chatId: BigInt(chat.id) },
         include: {
             Batches: {
-                where: { status: { not: "APPROVED" } },
+                where: { status: { in: ["PROCESSING", "NEEDS_REVIEW"] } },
                 orderBy: { createdAt: "desc" },
                 take: 1,
+                include: { Items: true },
             },
         },
     });
@@ -190,19 +290,20 @@ bot.hears(/^ПРИНЯТО$/i, async (ctx) => {
     }
 
     const batch = station.Batches[0]!;
-    await prisma.orderBatch.update({
-        where: { id: batch.id },
-        data: { status: "APPROVED" },
-    });
+    await prisma.orderBatch.update({ where: { id: batch.id }, data: { status: "APPROVED" } });
 
+    const total = batch.Items.reduce((s, i) => s + i.total, 0);
     await ctx.reply(
-        `✅ *Пакет подтверждён!*\nЗаказ-наряды готовы к загрузке в 1С.`,
+        `✅ *Пакет подтверждён!*\n\n` +
+        `📦 Позиций: ${batch.Items.length}\n` +
+        `💰 Сумма: ${total.toLocaleString("ru-RU")} руб.\n\n` +
+        `Для выгрузки Excel файла для 1С — напишите /export`,
         { parse_mode: "Markdown" }
     );
 });
 
 bot.catch((err) => {
-    console.error("Bot error:", err);
+    console.error("Bot error:", err.message);
 });
 
 console.log("🚀 STO Automation Bot запущен...");
