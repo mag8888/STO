@@ -18,6 +18,15 @@ import { startWebServer } from "./webServer.js";
 
 const bot = new Bot(process.env.BOT_TOKEN!);
 
+// Global error handler — logs all unhandled middleware errors to Railway console
+bot.catch((err) => {
+    const ctx = err.ctx;
+    console.error(`❌ Bot error for update ${ctx.update.update_id}:`);
+    console.error(err.error);
+    // Try to notify the user
+    ctx.reply("⚠️ Произошла внутренняя ошибка. Попробуйте ещё раз или сообщите администратору.").catch(() => { });
+});
+
 // ===== HELPERS =====
 
 async function getOrCreateStation(chatId: bigint, chatName: string) {
