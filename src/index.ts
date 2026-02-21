@@ -427,8 +427,7 @@ bot.on("message:text", async (ctx, next) => {
             let localPath: string | undefined;
             try {
                 await ctx.api.editMessageText(chat.id, statusMsg.message_id,
-                    `⏳ Обрабатываю ${processed + 1}/${filesToProcess.length}: _${driveFile.name}_`,
-                    { parse_mode: "Markdown" }
+                    `⏳ Обрабатываю ${processed + 1}/${filesToProcess.length}: ${driveFile.name}`
                 );
 
                 localPath = await downloadDriveFile(driveFile.id, driveFile.name);
