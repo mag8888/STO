@@ -442,6 +442,57 @@ bot.catch((err) => {
 registerAdminCommands(bot);
 registerOperatorCommands(bot);
 
+// ── Telegram slash-command menus ──────────────────────────────────────────────
+// Called once at startup to populate the "/" autocomplete for each user type.
+async function syncBotMenus() {
+    const SUPER_ADMIN_CMDS = [
+        { command: "admin", description: "🛠 Панель администратора" },
+        { command: "stats", description: "📊 Общая статистика" },
+        { command: "stations", description: "🏭 Список автосервисов" },
+        { command: "batches", description: "📋 Все пакеты ЗН" },
+        { command: "batches_review", description: "⚠️ Пакеты на проверке" },
+        { command: "exportall", description: "📤 Выгрузить всё в Excel" },
+        { command: "operators", description: "👥 Список операторов" },
+        { command: "addoperatorid", description: "➕ Добавить оператора (ID Имя)" },
+        { command: "removeoperator", description: "❌ Удалить оператора (№)" },
+        { command: "opstats", description: "📈 Статистика ЗН по операторам" },
+        { command: "opreport", description: "📑 Отчёт по оператору / all" },
+    ];
+
+    const OPERATOR_CMDS = [
+        { command: "export", description: "📤 Выгрузить мои ЗН в Excel" },
+    ];
+
+    // Set super-admin menus (private chat scope per user)
+    const ADMIN_IDS = (process.env.ADMIN_IDS || "")
+        .split(",").map(id => parseInt(id.trim())).filter(Boolean);
+
+    for (const adminId of ADMIN_IDS) {
+        try {
+            await bot.api.setMyCommands(SUPER_ADMIN_CMDS, {
+                scope: { type: "chat", chat_id: adminId },
+            });
+        } catch { /* user may not have started the bot yet */ }
+    }
+
+    // Set operator menus for all registered operators
+    const operators = await prisma.operator.findMany({ select: { telegramId: true } });
+    for (const op of operators) {
+        const chatId = Number(op.telegramId);
+        if (ADMIN_IDS.includes(chatId)) continue; // super admin already has full menu
+        try {
+            await bot.api.setMyCommands(OPERATOR_CMDS, {
+                scope: { type: "chat", chat_id: chatId },
+            });
+        } catch { }
+    }
+
+    // Default for everyone else: empty (no commands shown)
+    await bot.api.setMyCommands([], { scope: { type: "default" } });
+    console.log("✅ Bot command menus synced");
+}
+
+
 // Start web admin panel
 const PORT = parseInt(process.env.PORT || "3000");
 startWebServer(PORT).catch(console.error);
@@ -458,7 +509,10 @@ process.once("SIGTERM", shutdown);
 
 console.log("🚀 STO Automation Bot запущен...");
 bot.start({
-    onStart: () => console.log("✅ Bot polling started"),
+    onStart: () => {
+        console.log("✅ Bot polling started");
+        syncBotMenus().catch(console.error);
+    },
 }).catch((err: any) => {
     // If 409 conflict — wait and retry after old instance dies
     if (err?.error_code === 409) {

@@ -297,6 +297,13 @@ export function registerOperatorCommands(bot: Bot) {
             update: { nickname, addedBy: BigInt(ctx.from!.id) },
             create: { telegramId, nickname, addedBy: BigInt(ctx.from!.id) },
         });
+        // Give the operator their slash-command menu
+        try {
+            await bot.api.setMyCommands(
+                [{ command: "export", description: "📤 Выгрузить мои ЗН в Excel" }],
+                { scope: { type: "chat", chat_id: Number(telegramId) } }
+            );
+        } catch { /* will sync on next startup if user hasn't started bot yet */ }
         await ctx.reply(
             `✅ *Оператор зарегистрирован!*\n👤 *${op.nickname}* | ID: \`${op.telegramId}\``,
             { parse_mode: "Markdown" }
