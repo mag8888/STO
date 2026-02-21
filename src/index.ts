@@ -8,7 +8,7 @@ import {
     parseDriveUrl, listDriveFolder, downloadDriveFile, type DriveItem
 } from "./fileHandler.js";
 import { extractOrderFromImage } from "./ai.js";
-import { fetchPricelist, findPriceItem } from "./sheets.js";
+import { fetchPricelist, findPriceItem, appendZnToSheet } from "./sheets.js";
 import { extractArchive } from "./archiver.js";
 import { generateExcelReport, type ExportItem } from "./exporter.js";
 import { registerAdminCommands } from "./admin.js";
@@ -133,6 +133,13 @@ async function processSingleFile(
 
     const summary = formatSummary(fileName, parsed, priceWarnings, stationName);
     await ctx.reply(summary, { parse_mode: "Markdown" });
+
+    // Append to Google Sheets if configured
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        appendZnToSheet(parsed, fileName, stationName || "Автосервис").catch(e =>
+            console.error("appendZnToSheet failed:", e.message)
+        );
+    }
 }
 
 // ===== COMMANDS =====
