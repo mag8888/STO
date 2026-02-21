@@ -190,7 +190,7 @@ export function registerOperatorCommands(bot: Bot) {
             `Отправьте Telegram ID или @username оператора:\n\n` +
             `• Числовой ID: \`123456789\`\n` +
             `• Username: \`@ivan_mech\`\n\n` +
-            `📌 Узнать ID: напишите [@userinfobot](https://t.me/userinfobot)`,
+            `📌 Узнать ID: напишите боту @userinfobot`,
             { parse_mode: "Markdown", link_preview_options: { is_disabled: true }, ...cancelKb() }
         );
     }
@@ -270,7 +270,7 @@ export function registerOperatorCommands(bot: Bot) {
                     await ctx.reply(
                         `⚠️ Пользователь ${text} ещё не писал боту.\n` +
                         `Попросите его отправить любое сообщение боту, затем повторите.\n\n` +
-                        `_Или узнайте числовой ID через_ [@userinfobot](https://t.me/userinfobot)`,
+                        `Или узнайте числовой ID через @userinfobot`,
                         { parse_mode: "Markdown", link_preview_options: { is_disabled: true }, ...cancelKb() }
                     );
                     return;
