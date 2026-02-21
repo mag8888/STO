@@ -220,6 +220,7 @@ export async function startWebServer(port = 3000) {
     });
 
     await app.listen({ port, host: "0.0.0.0" });
-    console.log(`🌐 Web admin panel: http://localhost:${port}/admin`);
+    const publicUrl = process.env.WEB_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${port}`);
+    console.log(`🌐 Web admin panel: ${publicUrl}/admin`);
     return app;
 }

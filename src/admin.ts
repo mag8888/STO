@@ -30,6 +30,8 @@ export function registerAdminCommands(bot: Bot) {
 
     // /admin — main menu
     bot.command("admin", checkAdmin, async (ctx) => {
+        const webUrl = process.env.WEB_URL ||
+            (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
         await ctx.reply(
             `👤 *Панель администратора*\n\n` +
             `📊 /stats — общая статистика\n` +
@@ -39,7 +41,7 @@ export function registerAdminCommands(bot: Bot) {
             `✅ /approve\\_<ID> — подтвердить пакет\n` +
             `❌ /reject\\_<ID> — отклонить пакет\n` +
             `📤 /exportall — выгрузить всё в Excel\n\n` +
-            `🌐 Веб-панель: ${process.env.WEB_URL || "http://localhost:3000"}/admin`,
+            (webUrl ? `🌐 Веб-панель: ${webUrl}/admin` : `🌐 Веб-панель: _не настроена_`),
             { parse_mode: "Markdown" }
         );
     });
