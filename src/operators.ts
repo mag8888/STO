@@ -271,23 +271,23 @@ export function registerOperatorCommands(bot: Bot) {
                         `⚠️ Пользователь ${text} ещё не писал боту.\n` +
                         `Попросите его отправить любое сообщение боту, затем повторите.\n\n` +
                         `Или узнайте числовой ID через @userinfobot`,
-                        { parse_mode: "Markdown", link_preview_options: { is_disabled: true }, ...cancelKb() }
+                        { link_preview_options: { is_disabled: true }, ...cancelKb() }
                     );
                     return;
                 }
             } else {
                 await ctx.reply(
-                    "❌ Неверный формат.\n\nОтправьте числовой ID (`123456789`) или username (`@ivan_mech`)",
-                    { parse_mode: "Markdown", ...cancelKb() }
+                    "❌ Неверный формат.\n\nОтправьте числовой ID (например: 123456789) или username (@ivan_mech)",
+                    cancelKb()
                 );
                 return;
             }
 
             addOpPending.set(chatId, { step: "waiting_nickname", telegramId: telegramId!, telegramUsername });
             await ctx.reply(
-                `✅ ID принят: \`${telegramId}\`\n\n` +
-                `👤 Теперь введите псевдоним оператора:\n_(например: Иван Механик)_`,
-                { parse_mode: "Markdown", ...cancelKb() }
+                `✅ ID принят: ${telegramId}\n\n` +
+                `👤 Теперь введите псевдоним оператора (например: Иван Механик):`,
+                cancelKb()
             );
 
         } else if (state.step === "waiting_nickname") {
