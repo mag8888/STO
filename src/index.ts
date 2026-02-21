@@ -134,8 +134,8 @@ async function processSingleFile(
     const summary = formatSummary(fileName, parsed, priceWarnings, stationName);
     await ctx.reply(summary, { parse_mode: "Markdown" });
 
-    // Append to Google Sheets if GOOGLE_SCRIPT_URL is configured
-    if (process.env.GOOGLE_SCRIPT_URL) {
+    // Append to Google Sheets if GOOGLE_SERVICE_ACCOUNT_JSON is configured
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         appendZnToSheet(parsed, fileName, stationName || "Автосервис").catch(e =>
             console.error("appendZnToSheet failed:", e.message)
         );
