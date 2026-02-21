@@ -12,6 +12,7 @@ import { fetchPricelist, findPriceItem } from "./sheets.js";
 import { extractArchive } from "./archiver.js";
 import { generateExcelReport, type ExportItem } from "./exporter.js";
 import { registerAdminCommands } from "./admin.js";
+import { registerOperatorCommands, findOperator, notifySuperAdminsZnUploaded } from "./operators.js";
 import { startWebServer } from "./webServer.js";
 
 
@@ -202,6 +203,10 @@ bot.on(["message:photo", "message:document"], async (ctx) => {
     const chatName = chat.title || (chat as any).first_name || "Автосервис";
     const station = await getOrCreateStation(BigInt(chat.id), chatName);
 
+    // Identify operator (if registered)
+    const senderId = ctx.from?.id ? BigInt(ctx.from.id) : null;
+    const operator = senderId ? await findOperator(senderId) : null;
+
     let fileId: string | undefined;
     let fileName: string | undefined;
 
@@ -227,15 +232,23 @@ bot.on(["message:photo", "message:document"], async (ctx) => {
         const telegramFileUrl = `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${file.file_path}`;
         filePath = await downloadFile(telegramFileUrl, fileName);
 
-        // Create batch
+        // Create batch (link to operator if known)
         const batch = await prisma.orderBatch.create({
             data: {
                 serviceStationId: station.id,
+                operatorId: operator?.id ?? null,
                 weekStartDate: new Date(),
                 status: "PROCESSING",
                 rawFiles: JSON.stringify([fileName]),
             },
         });
+
+        // Notify super admins about new ZN upload
+        if (operator) {
+            await notifySuperAdminsZnUploaded(
+                bot, operator.nickname, operator.telegramUsername, fileName!, batch.id
+            );
+        }
 
         if (isArchiveFile(fileName)) {
             // Extract archive and process each file
@@ -427,6 +440,7 @@ bot.catch((err) => {
 
 // Register admin bot commands
 registerAdminCommands(bot);
+registerOperatorCommands(bot);
 
 // Start web admin panel
 const PORT = parseInt(process.env.PORT || "3000");

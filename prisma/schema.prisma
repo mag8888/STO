@@ -16,10 +16,25 @@ model ServiceStation {
   Batches   OrderBatch[]
 }
 
+/// Зарегистрированный оператор (добавляется супер-админом)
+model Operator {
+  id               Int        @id @default(autoincrement())
+  telegramId       BigInt     @unique
+  telegramUsername String?
+  nickname         String     // Псевдоним/имя оператора
+  addedBy          BigInt     // chatId суперадмина, который добавил
+  createdAt        DateTime   @default(now())
+  Batches          OrderBatch[]
+
+  @@map("operators")
+}
+
 model OrderBatch {
   id               Int      @id @default(autoincrement())
   serviceStationId Int
   serviceStation   ServiceStation @relation(fields: [serviceStationId], references: [id])
+  operatorId       Int?
+  operator         Operator? @relation(fields: [operatorId], references: [id])
   weekStartDate    DateTime
   status           String   @default("PROCESSING") // PROCESSING, NEEDS_REVIEW, APPROVED
   rawFiles         String   // JSON string of file paths
