@@ -341,12 +341,15 @@ bot.hears(/^ПРИНЯТО$/i, async (ctx) => {
 //   https://drive.google.com/drive/folders/XXX обработай 5  → process first 5
 //   https://drive.google.com/file/d/XXX                → process single file
 
-bot.on("message:text", async (ctx) => {
+bot.on("message:text", async (ctx, next) => {
     const text = ctx.message.text || "";
+
+    // Let slash commands be handled by bot.command() handlers
+    if (text.startsWith("/")) return next();
 
     // Check if message contains a Google Drive URL
     const driveUrlMatch = text.match(/https:\/\/drive\.google\.com\/[^\s]+/);
-    if (!driveUrlMatch) return;
+    if (!driveUrlMatch) return next(); // pass through to other handlers (e.g. ПРИНЯТО handler)
 
     const driveUrl = driveUrlMatch[0]!;
     const parsed = parseDriveUrl(driveUrl);
@@ -443,9 +446,7 @@ bot.on("message:text", async (ctx) => {
     }
 });
 
-bot.catch((err) => {
-    console.error("Bot error:", err.message);
-});
+
 
 // Register admin bot commands
 registerAdminCommands(bot);
