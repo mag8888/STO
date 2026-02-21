@@ -12,7 +12,7 @@ import { fetchPricelist, findPriceItem } from "./sheets.js";
 import { extractArchive } from "./archiver.js";
 import { generateExcelReport, type ExportItem } from "./exporter.js";
 import { registerAdminCommands } from "./admin.js";
-import { registerOperatorCommands, findOperator, notifySuperAdminsZnUploaded } from "./operators.js";
+import { registerOperatorCommands, findOperator, notifySuperAdminsZnUploaded, notifyAdminsNewUser } from "./operators.js";
 import { startWebServer } from "./webServer.js";
 
 
@@ -151,6 +151,15 @@ bot.command("start", async (ctx) => {
         `Напишите *ПРИНЯТО* для финального подтверждения.`,
         { parse_mode: "Markdown" }
     );
+    // Notify super-admins so they can add this user as an operator with one click
+    if (ctx.from) {
+        notifyAdminsNewUser(
+            bot,
+            BigInt(ctx.from.id),
+            ctx.from.username || null,
+            ctx.from.first_name || "Без имени",
+        ).catch(() => { });
+    }
 });
 
 bot.command("export", async (ctx) => {

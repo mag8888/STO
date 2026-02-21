@@ -39,6 +39,33 @@ export async function notifySuperAdminsZnUploaded(
     }
 }
 
+/** Notify super-admins when a new user starts the bot — gives them an "Add as operator" button */
+export async function notifyAdminsNewUser(
+    bot: Bot,
+    telegramId: bigint,
+    username: string | null,
+    firstName: string,
+) {
+    // Skip if already an operator or if they're a super admin
+    const existing = await prisma.operator.findUnique({ where: { telegramId } });
+    if (existing || isSuperAdmin(Number(telegramId))) return;
+
+    const kb = new InlineKeyboard()
+        .text("➕ Добавить оператором", `addop_from_start:${telegramId}:${username || ""}`)
+        .text("❌ Пропустить", `addop_skip:${telegramId}`);
+
+    const msg =
+        `🆕 Новый пользователь запустил бота:\n\n` +
+        `👤 Имя: ${firstName}\n` +
+        `🆔 ID: ${telegramId}\n` +
+        (username ? `📛 Username: @${username}\n` : "") +
+        `\nДобавить этого пользователя как оператора?`;
+
+    for (const adminId of SUPER_ADMIN_IDS) {
+        try { await bot.api.sendMessage(String(adminId), msg, { reply_markup: kb }); } catch { }
+    }
+}
+
 // ─── Conversational state machine for adding operators ────────────────────────
 
 type AddOpState =
@@ -300,11 +327,30 @@ export function registerOperatorCommands(bot: Bot) {
         }
     });
 
-    // Cancel inline button
+    // Cancel inline button (mid-conversation)
     bot.callbackQuery("cancel_addop", async (ctx) => {
         const chatId = ctx.chat?.id;
         if (chatId) addOpPending.delete(chatId as number);
         await ctx.editMessageText("❌ Отменено.");
+        await ctx.answerCallbackQuery();
+    });
+
+    // "➕ Добавить оператором" from /start notification — go straight to nickname step
+    bot.callbackQuery(/^addop_from_start:(\d+):(.*)$/, async (ctx) => {
+        const telegramId = BigInt(ctx.match[1]);
+        const username = ctx.match[2] || null;
+        const chatId = ctx.chat!.id as number;
+        addOpPending.set(chatId, { step: "waiting_nickname", telegramId, telegramUsername: username || null });
+        await ctx.editMessageText(
+            `✅ Пользователь выбран (ID: ${telegramId})\n\n` +
+            `Введите псевдоним оператора (например: Иван Механик):`
+        );
+        await ctx.answerCallbackQuery();
+    });
+
+    // "❌ Пропустить" from /start notification
+    bot.callbackQuery(/^addop_skip:(\d+)$/, async (ctx) => {
+        await ctx.editMessageText("❌ Пользователь пропущен.");
         await ctx.answerCallbackQuery();
     });
 
