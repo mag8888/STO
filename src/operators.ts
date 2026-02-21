@@ -235,12 +235,13 @@ export function registerOperatorCommands(bot: Bot) {
                 { scope: { type: "chat", chat_id: Number(telegramId) } }
             );
         } catch { }
+        const usernameStr = op.telegramUsername ? `@${op.telegramUsername}` : "—";
         await ctx.reply(
-            `✅ *Оператор зарегистрирован!*\n\n` +
-            `👤 Псевдоним: *${op.nickname}*\n` +
-            `🆔 Telegram ID: \`${op.telegramId}\`\n` +
-            `📛 Username: ${op.telegramUsername ? "@" + op.telegramUsername : "—"}`,
-            { parse_mode: "Markdown" }
+            `✅ Оператор зарегистрирован!\n\n` +
+            `👤 Псевдоним: ${op.nickname}\n` +
+            `🆔 Telegram ID: ${op.telegramId}\n` +
+            `📛 Username: ${usernameStr}`
+            // No parse_mode — usernames may contain underscores which break Markdown v1
         );
     }
 
@@ -341,8 +342,9 @@ export function registerOperatorCommands(bot: Bot) {
         const username = ctx.match[2] || null;
         const chatId = ctx.chat!.id as number;
         addOpPending.set(chatId, { step: "waiting_nickname", telegramId, telegramUsername: username || null });
+        const displayName = username ? `@${username} (ID: ${telegramId})` : `ID: ${telegramId}`;
         await ctx.editMessageText(
-            `✅ Пользователь выбран (ID: ${telegramId})\n\n` +
+            `✅ Пользователь выбран: ${displayName}\n\n` +
             `Введите псевдоним оператора (например: Иван Механик):`
         );
         await ctx.answerCallbackQuery();
