@@ -1,4 +1,3 @@
-import { google } from "googleapis";
 import type { ParsedOrder } from "./ai.js";
 
 // ─── Pricelist (read-only, public CSV) ────────────────────────────────────────
@@ -73,80 +72,51 @@ export function findPriceItem(workName: string, pricelist: PriceItem[]): PriceIt
     return match;
 }
 
-// ─── Google Sheets write (service account) ────────────────────────────────────
+// ─── Google Sheets write via Apps Script Web App ──────────────────────────────
+//
+// Setup (one-time):
+//   1. Open your Google Sheet → Extensions → Apps Script
+//   2. Paste the script from https://github.com/mag8888/STO (see docs)
+//   3. Deploy → New deployment → Web app → Anyone → Copy URL
+//   4. Add to Railway Variables: GOOGLE_SCRIPT_URL = <that URL>
+//              (optionally)      GOOGLE_SHEETS_ZN_TAB = "ЗН"
+//
+// No keys, no service accounts — just a URL!
 
-/**
- * Append a digitized ZN (заказ-наряд) to the Google Sheet as a new block of rows.
- *
- * Requires env vars:
- *   GOOGLE_SERVICE_ACCOUNT_JSON  — full JSON of the service account key file
- *   GOOGLE_SHEETS_ZN_ID          — spreadsheet ID to write to (may equal GOOGLE_SHEETS_ID)
- *   GOOGLE_SHEETS_ZN_TAB         — sheet tab name, e.g. "ЗН" (defaults to first sheet)
- */
 export async function appendZnToSheet(
     parsed: ParsedOrder,
     fileName: string,
     stationName: string,
 ): Promise<void> {
-    const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (!saJson) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON not set. See /admin for setup instructions.");
+    const scriptUrl = process.env.GOOGLE_SCRIPT_URL;
+    if (!scriptUrl) throw new Error("GOOGLE_SCRIPT_URL not set");
 
-    const sheetId = process.env.GOOGLE_SHEETS_ZN_ID || process.env.GOOGLE_SHEETS_ID;
-    if (!sheetId) throw new Error("GOOGLE_SHEETS_ZN_ID not set.");
+    const payload = {
+        tab: process.env.GOOGLE_SHEETS_ZN_TAB || "ЗН",
+        station: stationName,
+        fileName,
+        plate: parsed.plateNumber || parsed.vin || "",
+        mileage: parsed.mileage ? String(parsed.mileage) : "",
+        date: parsed.date || new Date().toLocaleDateString("ru-RU"),
+        items: parsed.items.map(i => ({
+            workName: i.workName,
+            quantity: i.quantity,
+            price: i.price,
+            total: i.total,
+        })),
+    };
 
-    const tabName = process.env.GOOGLE_SHEETS_ZN_TAB || "ЗН";
-
-    const credentials = JSON.parse(saJson);
-    const auth = new google.auth.GoogleAuth({
-        credentials,
-        scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    // Google Apps Script redirects POST → GET when deployed as web app,
+    // so we must follow redirects and use the right content type.
+    const response = await fetch(scriptUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        redirect: "follow",
     });
 
-    const sheets = google.sheets({ version: "v4", auth });
-
-    const now = new Date().toLocaleDateString("ru-RU");
-    const plate = parsed.plateNumber || parsed.vin || "—";
-    const mileage = parsed.mileage ? String(parsed.mileage) : "—";
-
-    // Build rows: header row + one row per item
-    const rows: string[][] = [];
-
-    // Separator / header row
-    rows.push([
-        `=== ${stationName} | ${fileName} | ${now} ===`,
-        "", "", "", "", "", ""
-    ]);
-
-    // Column headers
-    rows.push(["Дата", "Автосервис", "Госномер", "Пробег", "Наименование работы/запчасти", "Кол-во", "Цена", "Сумма"]);
-
-    // Data rows
-    for (const item of parsed.items) {
-        rows.push([
-            now,
-            stationName,
-            plate,
-            mileage,
-            item.workName,
-            String(item.quantity),
-            String(item.price),
-            String(item.total),
-        ]);
+    const text = await response.text();
+    if (!response.ok && !text.includes("OK")) {
+        throw new Error(`Script error ${response.status}: ${text.slice(0, 200)}`);
     }
-
-    // Total row
-    const grandTotal = parsed.items.reduce((s, i) => s + i.total, 0);
-    rows.push(["", "", "", "", "ИТОГО:", "", "", String(grandTotal)]);
-
-    // Empty separator
-    rows.push(["", "", "", "", "", "", "", ""]);
-
-    // Append to end of sheet
-    await sheets.spreadsheets.values.append({
-        spreadsheetId: sheetId,
-        range: `${tabName}!A:H`,
-        valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
-        requestBody: { values: rows },
-    });
 }
