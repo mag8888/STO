@@ -235,7 +235,16 @@ export function registerOperatorCommands(bot: Bot) {
         const args = ctx.message?.text?.replace("/addoperator", "").trim() || "";
         const parts = args.split(/\s+/);
         if (parts.length < 2) {
-            await ctx.reply("ℹ️ Использование:\n`/addoperator @username Псевдоним`", { parse_mode: "Markdown" });
+            await ctx.reply(
+                `👤 *Добавление оператора по @username*\n\n` +
+                `Укажите команду в формате:\n` +
+                `\`/addoperator @username Псевдоним\`\n\n` +
+                `*Пример:*\n` +
+                `\`/addoperator @ivan_mech Иван Механик\`\n\n` +
+                `⚠️ Оператор должен предварительно написать боту хотя бы одно сообщение.\n` +
+                `Если вы знаете только числовой ID — используйте /addoperatorid`,
+                { parse_mode: "Markdown" }
+            );
             return;
         }
         const rawTarget = parts[0];
@@ -283,7 +292,16 @@ export function registerOperatorCommands(bot: Bot) {
         const args = ctx.message?.text?.replace("/addoperatorid", "").trim() || "";
         const parts = args.split(/\s+/);
         if (parts.length < 2) {
-            await ctx.reply("ℹ️ Использование:\n`/addoperatorid 123456789 Псевдоним`", { parse_mode: "Markdown" });
+            await ctx.reply(
+                `👤 *Добавление оператора по Telegram ID*\n\n` +
+                `Укажите числовой ID и псевдоним оператора:\n` +
+                `\`/addoperatorid 123456789 Псевдоним\`\n\n` +
+                `*Пример:*\n` +
+                `\`/addoperatorid 987654321 Сергей Авто\`\n\n` +
+                `📌 Как узнать Telegram ID оператора?\n` +
+                `Попросите его написать боту [@userinfobot](https://t.me/userinfobot) — он покажет числовой ID.`,
+                { parse_mode: "Markdown", link_preview_options: { is_disabled: true } }
+            );
             return;
         }
         let telegramId: bigint;
@@ -334,7 +352,15 @@ export function registerOperatorCommands(bot: Bot) {
     bot.command("removeoperator", checkSuperAdmin, async (ctx) => {
         const arg = ctx.message?.text?.replace("/removeoperator", "").trim();
         if (!arg) {
-            await ctx.reply("ℹ️ Укажите №: `/removeoperator 3`", { parse_mode: "Markdown" });
+            const ops = await prisma.operator.findMany({ select: { id: true, nickname: true }, orderBy: { createdAt: "asc" } });
+            let msg = `❌ *Удаление оператора*\n\nУкажите № оператора из списка:\n\`/removeoperator №\`\n\n`;
+            if (ops.length > 0) {
+                msg += `*Текущие операторы:*\n`;
+                ops.forEach(op => { msg += `• №${op.id} — ${op.nickname}\n`; });
+            } else {
+                msg += `_Операторов пока нет_`;
+            }
+            await ctx.reply(msg, { parse_mode: "Markdown" });
             return;
         }
         const id = parseInt(arg);
